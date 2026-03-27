@@ -91,7 +91,13 @@ const AREDL_RAW = 'https://raw.githubusercontent.com/All-Rated-Extreme-Demon-Lis
 export async function getAREDLList() {
   const res = await fetch(`${AREDL_RAW}/_list.json`);
   if (!res.ok) throw new Error('Failed to fetch AREDL list');
-  return res.json(); // returns array of slug strings
+  return res.json();
+}
+
+export async function getAREDLNameMap() {
+  const res = await fetch(`${AREDL_RAW}/_name_map.json`);
+  if (!res.ok) return {};
+  return res.json();
 }
 
 export async function getAREDLDemon(slug) {

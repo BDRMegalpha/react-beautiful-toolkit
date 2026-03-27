@@ -4,88 +4,150 @@ import { Stars } from '@react-three/drei'
 import * as THREE from 'three'
 import { searchPlayer, getPlayerIconURL } from '../api/gd'
 
-// ─── Global drag state shared between shapes and the drag plane ───
-const dragState = {
+/*
+  Drag system: uses a global ref to track which mesh is being dragged.
+  A DragManager component runs in useFrame and handles all drag logic
+  by listening to native DOM events on the canvas, then raycasting to
+  find/move shapes.
+*/
+const dragRef = {
   active: false,
-  meshRef: null,
+  mesh: null,
+  plane: new THREE.Plane(),
   offset: new THREE.Vector3(),
-  velocity: new THREE.Vector3(),
+  intersection: new THREE.Vector3(),
   prevPoint: new THREE.Vector3(),
+  velocity: new THREE.Vector3(),
 }
 
-// ─── Invisible plane that catches pointer events during drag ───
-function DragPlane() {
-  const { camera } = useThree()
-  const planeRef = useRef()
+// All interactive meshes register here
+const interactiveMeshes = new Set()
 
-  useFrame(() => {
-    if (planeRef.current) {
-      // Always face the camera
-      planeRef.current.quaternion.copy(camera.quaternion)
+function DragManager() {
+  const { camera, gl, raycaster } = useThree()
+  const mouse = useMemo(() => new THREE.Vector2(), [])
+
+  useEffect(() => {
+    const canvas = gl.domElement
+
+    const getMouseNDC = (e) => {
+      const rect = canvas.getBoundingClientRect()
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
     }
-  })
 
-  const onMove = useCallback((e) => {
-    if (!dragState.active || !dragState.meshRef?.current) return
-    e.stopPropagation()
-    const point = e.point.clone()
-    const delta = point.clone().sub(dragState.prevPoint)
-    dragState.velocity.copy(delta)
-    dragState.meshRef.current.position.add(delta)
-    dragState.prevPoint.copy(point)
-  }, [])
+    const onPointerDown = (e) => {
+      getMouseNDC(e)
+      raycaster.setFromCamera(mouse, camera)
+      const meshArray = Array.from(interactiveMeshes).filter(m => m.current)
+      const objects = meshArray.map(m => m.current)
+      const intersects = raycaster.intersectObjects(objects, false)
 
-  const onUp = useCallback((e) => {
-    if (!dragState.active) return
-    e.stopPropagation()
-    dragState.active = false
-    dragState.meshRef = null
-    document.body.style.cursor = 'default'
-  }, [])
+      if (intersects.length > 0) {
+        const hit = intersects[0]
+        dragRef.active = true
+        dragRef.mesh = hit.object
+        // Create a plane facing camera at the object's z depth
+        dragRef.plane.setFromNormalAndCoplanarPoint(
+          camera.getWorldDirection(new THREE.Vector3()).negate(),
+          hit.object.position
+        )
+        raycaster.ray.intersectPlane(dragRef.plane, dragRef.intersection)
+        dragRef.offset.copy(hit.object.position).sub(dragRef.intersection)
+        dragRef.prevPoint.copy(dragRef.intersection)
+        dragRef.velocity.set(0, 0, 0)
+        canvas.style.cursor = 'grabbing'
+        // Mark this mesh as being dragged
+        dragRef.mesh.userData.dragging = true
+      }
+    }
 
-  return (
-    <mesh ref={planeRef} visible={false} onPointerMove={onMove} onPointerUp={onUp}>
-      <planeGeometry args={[100, 100]} />
-      <meshBasicMaterial transparent opacity={0} side={THREE.DoubleSide} />
-    </mesh>
-  )
+    const onPointerMove = (e) => {
+      getMouseNDC(e)
+      raycaster.setFromCamera(mouse, camera)
+
+      if (dragRef.active && dragRef.mesh) {
+        raycaster.ray.intersectPlane(dragRef.plane, dragRef.intersection)
+        const newPos = dragRef.intersection.clone().add(dragRef.offset)
+        dragRef.velocity.copy(newPos).sub(dragRef.mesh.position).multiplyScalar(0.8)
+        dragRef.mesh.position.copy(newPos)
+        dragRef.prevPoint.copy(dragRef.intersection)
+      } else {
+        // Check hover
+        const meshArray = Array.from(interactiveMeshes).filter(m => m.current)
+        const objects = meshArray.map(m => m.current)
+        const intersects = raycaster.intersectObjects(objects, false)
+        if (intersects.length > 0) {
+          canvas.style.cursor = 'grab'
+          intersects[0].object.userData.hovered = true
+          objects.forEach(o => { if (o !== intersects[0].object) o.userData.hovered = false })
+        } else {
+          canvas.style.cursor = 'default'
+          objects.forEach(o => { o.userData.hovered = false })
+        }
+      }
+    }
+
+    const onPointerUp = () => {
+      if (dragRef.mesh) {
+        dragRef.mesh.userData.dragging = false
+        dragRef.mesh.userData.throwVelocity = dragRef.velocity.clone()
+        dragRef.mesh.userData.throwTimer = 3
+      }
+      dragRef.active = false
+      dragRef.mesh = null
+      canvas.style.cursor = 'default'
+    }
+
+    canvas.addEventListener('pointerdown', onPointerDown)
+    canvas.addEventListener('pointermove', onPointerMove)
+    canvas.addEventListener('pointerup', onPointerUp)
+    canvas.addEventListener('pointerleave', onPointerUp)
+
+    return () => {
+      canvas.removeEventListener('pointerdown', onPointerDown)
+      canvas.removeEventListener('pointermove', onPointerMove)
+      canvas.removeEventListener('pointerup', onPointerUp)
+      canvas.removeEventListener('pointerleave', onPointerUp)
+    }
+  }, [camera, gl, raycaster, mouse])
+
+  return null
 }
 
-// ─── Interactive shape with hover jiggle + drag/throw ───
+// ─── Shape wrapper with hover jiggle + throw response ───
 function InteractiveShape({ position, color, children }) {
   const ref = useRef()
-  const [hovered, setHovered] = useState(false)
-  const isDragging = useRef(false)
   const basePos = useRef(new THREE.Vector3(...position))
-  const localVelocity = useRef(new THREE.Vector3())
-  const throwTimer = useRef(0)
+
+  // Register for raycasting
+  useEffect(() => {
+    interactiveMeshes.add(ref)
+    return () => interactiveMeshes.delete(ref)
+  }, [])
 
   useFrame((state) => {
     if (!ref.current) return
     const t = state.clock.elapsedTime
+    const ud = ref.current.userData
 
-    // While being dragged by the global drag system
-    if (dragState.active && dragState.meshRef?.current === ref.current) {
-      isDragging.current = true
-      ref.current.scale.setScalar(1.25)
-      localVelocity.current.copy(dragState.velocity)
+    // Being dragged — scale up, handled by DragManager
+    if (ud.dragging) {
+      ref.current.scale.setScalar(1.3)
       return
     }
 
-    // Just released — apply throw velocity
-    if (isDragging.current) {
-      isDragging.current = false
-      throwTimer.current = 3 // seconds of throw physics
-    }
-
     // Throw physics
-    if (throwTimer.current > 0) {
-      throwTimer.current -= 0.016
-      ref.current.position.add(localVelocity.current)
-      localVelocity.current.multiplyScalar(0.94)
-      ref.current.rotation.x += localVelocity.current.x * 2
-      ref.current.rotation.y += localVelocity.current.y * 2
-      // Drift back to base
+    if (ud.throwTimer > 0) {
+      ud.throwTimer -= 0.016
+      const vel = ud.throwVelocity
+      if (vel) {
+        ref.current.position.add(vel)
+        vel.multiplyScalar(0.93)
+        ref.current.rotation.x += vel.x * 2
+        ref.current.rotation.y += vel.y * 2
+      }
+      // Drift back
       const drift = basePos.current.clone().sub(ref.current.position).multiplyScalar(0.005)
       ref.current.position.add(drift)
       ref.current.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05)
@@ -93,7 +155,7 @@ function InteractiveShape({ position, color, children }) {
     }
 
     // Hover jiggle
-    if (hovered) {
+    if (ud.hovered) {
       ref.current.rotation.x += Math.sin(t * 15) * 0.03
       ref.current.rotation.y += Math.cos(t * 12) * 0.03
       ref.current.scale.setScalar(1.2 + Math.sin(t * 10) * 0.08)
@@ -101,99 +163,33 @@ function InteractiveShape({ position, color, children }) {
       ref.current.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05)
     }
 
-    // Gentle idle float
+    // Idle float
     ref.current.position.y = basePos.current.y + Math.sin(t * 0.5 + basePos.current.x) * 0.3
     ref.current.rotation.y += 0.004
   })
 
-  const onPointerDown = useCallback((e) => {
-    e.stopPropagation()
-    dragState.active = true
-    dragState.meshRef = ref
-    dragState.prevPoint.copy(e.point)
-    dragState.velocity.set(0, 0, 0)
-    localVelocity.current.set(0, 0, 0)
-    throwTimer.current = 0
-    document.body.style.cursor = 'grabbing'
-  }, [])
-
   return (
-    <mesh
-      ref={ref}
-      position={position}
-      onPointerOver={(e) => { e.stopPropagation(); setHovered(true); if (!dragState.active) document.body.style.cursor = 'grab' }}
-      onPointerOut={(e) => { e.stopPropagation(); setHovered(false); if (!dragState.active) document.body.style.cursor = 'default' }}
-      onPointerDown={onPointerDown}
-    >
+    <mesh ref={ref} position={position}>
       {children}
       <meshStandardMaterial
         color={color}
         emissive={color}
-        emissiveIntensity={hovered || isDragging.current ? 1.4 : 0.6}
+        emissiveIntensity={0.6}
         transparent
-        opacity={hovered ? 0.95 : 0.8}
+        opacity={0.85}
       />
     </mesh>
   )
 }
 
-// ─── Player icon cube ───
-function PlayerIconCube({ position }) {
-  return (
-    <InteractiveShape position={position} color="#ffffff">
-      <boxGeometry args={[1.2, 1.2, 1.2]} />
-    </InteractiveShape>
-  )
-}
-
-// ─── Actual GD shapes ───
-
-// Cube mode icon - the classic square player
+// ─── GD shapes ───
 function GDCube(props) { return <InteractiveShape {...props}><boxGeometry args={[1, 1, 1]} /></InteractiveShape> }
-
-// Ship mode - triangular wedge (like the GD ship)
-function GDShip(props) {
-  return (
-    <InteractiveShape {...props}>
-      <coneGeometry args={[0.7, 1.4, 3]} />
-    </InteractiveShape>
-  )
-}
-
-// Ball mode - sphere that rolls
+function GDShip(props) { return <InteractiveShape {...props}><coneGeometry args={[0.7, 1.4, 3]} /></InteractiveShape> }
 function GDBall(props) { return <InteractiveShape {...props}><sphereGeometry args={[0.55, 32, 32]} /></InteractiveShape> }
-
-// UFO mode - flat disc/saucer
-function GDUFO(props) {
-  return (
-    <InteractiveShape {...props}>
-      <cylinderGeometry args={[0.7, 0.7, 0.2, 32]} />
-    </InteractiveShape>
-  )
-}
-
-// Wave mode - thin dart/diamond shape
-function GDWave(props) {
-  return (
-    <InteractiveShape {...props}>
-      <octahedronGeometry args={[0.5, 0]} />
-    </InteractiveShape>
-  )
-}
-
-// Spike - the classic triangle obstacle
-function GDSpike(props) {
-  return (
-    <InteractiveShape {...props}>
-      <coneGeometry args={[0.5, 1.2, 4]} />
-    </InteractiveShape>
-  )
-}
-
-// Jump Orb - the ring you tap to jump
+function GDUFO(props) { return <InteractiveShape {...props}><cylinderGeometry args={[0.7, 0.7, 0.2, 32]} /></InteractiveShape> }
+function GDWave(props) { return <InteractiveShape {...props}><octahedronGeometry args={[0.5, 0]} /></InteractiveShape> }
+function GDSpike(props) { return <InteractiveShape {...props}><coneGeometry args={[0.5, 1.2, 4]} /></InteractiveShape> }
 function GDOrb(props) { return <InteractiveShape {...props}><torusGeometry args={[0.5, 0.18, 16, 48]} /></InteractiveShape> }
-
-// Diamond pickup
 function GDDiamond(props) { return <InteractiveShape {...props}><octahedronGeometry args={[0.45, 0]} /></InteractiveShape> }
 
 function FloatingParticles() {
@@ -231,7 +227,6 @@ const DEFAULT_SHAPES = [
 const SHAPE_MAP = { cube: GDCube, ship: GDShip, ball: GDBall, ufo: GDUFO, wave: GDWave, spike: GDSpike, orb: GDOrb, diamond: GDDiamond }
 
 function ShapeRenderer({ shape }) {
-  if (shape.type === 'player') return <PlayerIconCube position={shape.position} />
   const C = SHAPE_MAP[shape.type] || GDCube
   return <C position={shape.position} color={shape.color} />
 }
@@ -243,15 +238,15 @@ function SceneContent({ shapes }) {
       <pointLight position={[5, 5, 5]} color="#00ffff" intensity={2} />
       <pointLight position={[-5, -3, 3]} color="#ff00ff" intensity={1.5} />
       <pointLight position={[0, 3, -5]} color="#ffff00" intensity={1} />
-      <DragPlane />
-      {shapes.map((s, i) => <ShapeRenderer key={`${s.type}-${i}-${s.username || ''}`} shape={s} />)}
+      <DragManager />
+      {shapes.map((s, i) => <ShapeRenderer key={`${s.type}-${i}`} shape={s} />)}
       <FloatingParticles />
       <Stars radius={50} depth={50} count={1000} factor={4} saturation={1} fade speed={1.5} />
     </>
   )
 }
 
-// ─── Secret Menu (Arrow pattern: Up Left Down Right) ───
+// ─── Secret Menu ───
 function SecretMenu({ shapes, setShapes, open, setOpen }) {
   const [username, setUsername] = useState(() => localStorage.getItem('dr-username') || '')
   const [profile, setProfile] = useState(null)
@@ -262,20 +257,17 @@ function SecretMenu({ shapes, setShapes, open, setOpen }) {
     if (!username.trim()) return
     setProfileLoading(true); setProfileError(null)
     localStorage.setItem('dr-username', username.trim())
-    try {
-      const data = await searchPlayer(username.trim())
-      setProfile(data)
-    } catch { setProfileError('Player not found'); setProfile(null) }
+    try { setProfile(await searchPlayer(username.trim())) }
+    catch { setProfileError('Player not found'); setProfile(null) }
     finally { setProfileLoading(false) }
   }
 
   const addPlayerCube = () => {
     if (!username.trim()) return
     setShapes(prev => [...prev, {
-      type: 'player',
-      username: username.trim(),
+      type: 'cube',
       position: [(Math.random() - 0.5) * 4, (Math.random() - 0.5) * 3, -2],
-      color: '#ffffff',
+      color: '#00ffff',
     }])
   }
 
@@ -297,7 +289,6 @@ function SecretMenu({ shapes, setShapes, open, setOpen }) {
         <button onClick={() => setOpen(false)} className="text-xs" style={{ color: '#6b7280' }}>ESC</button>
       </div>
 
-      {/* Profile */}
       {profile && (
         <div className="mb-4 p-3 rounded-xl" style={{ background: 'rgba(0,255,255,0.05)', border: '1px solid rgba(0,255,255,0.15)' }}>
           <div className="flex items-center gap-3 mb-2">
@@ -322,12 +313,11 @@ function SecretMenu({ shapes, setShapes, open, setOpen }) {
           </div>
           <button onClick={addPlayerCube} className="w-full mt-2 px-3 py-1.5 rounded-lg text-xs font-bold"
             style={{ background: 'linear-gradient(135deg, #00ffff22, #ff00ff22)', border: '1px solid #00ffff33', color: '#00ffff' }}>
-            Add My Icon to Scene
+            Add Cube to Scene
           </button>
         </div>
       )}
 
-      {/* Username */}
       <div className="mb-4">
         <label className="text-xs block mb-1" style={{ color: '#9ca3af' }}>Your GD Username</label>
         <div className="flex gap-2">
@@ -343,10 +333,9 @@ function SecretMenu({ shapes, setShapes, open, setOpen }) {
         {profileError && <div className="text-xs mt-1" style={{ color: '#ff4444' }}>{profileError}</div>}
       </div>
 
-      {/* Add Shapes */}
       <div className="mb-4">
         <label className="text-xs block mb-2" style={{ color: '#9ca3af' }}>Add GD Objects</label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-1.5">
           {[
             { type: 'cube', label: 'Cube', color: '#00ffff' },
             { type: 'ship', label: 'Ship', color: '#00ff88' },
@@ -355,26 +344,25 @@ function SecretMenu({ shapes, setShapes, open, setOpen }) {
             { type: 'wave', label: 'Wave', color: '#00ccff' },
             { type: 'spike', label: 'Spike', color: '#ff4444' },
             { type: 'orb', label: 'Orb', color: '#ff00ff' },
-            { type: 'diamond', label: 'Diamond', color: '#ffcc00' },
+            { type: 'diamond', label: 'Gem', color: '#ffcc00' },
           ].map(s => (
             <button key={s.type} onClick={() => addShape(s.type, s.color)}
-              className="px-2 py-2 rounded-lg text-xs font-bold transition-all hover:scale-105"
+              className="px-1.5 py-1.5 rounded-lg text-[10px] font-bold hover:scale-105 transition-transform"
               style={{ background: `${s.color}15`, border: `1px solid ${s.color}33`, color: s.color }}>{s.label}</button>
           ))}
         </div>
       </div>
 
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2">
         <span className="text-xs" style={{ color: '#6b7280' }}>Objects: <span style={{ color: '#00ffff' }}>{shapes.length}</span></span>
         <button onClick={() => setShapes(DEFAULT_SHAPES)} className="px-3 py-1 rounded-lg text-xs font-bold"
           style={{ background: 'rgba(255,68,68,0.15)', border: '1px solid rgba(255,68,68,0.3)', color: '#ff4444' }}>Reset</button>
       </div>
-      <div className="text-center text-xs" style={{ color: '#4b5563' }}>↑ ← ↓ → to toggle</div>
+      <div className="text-center text-[10px]" style={{ color: '#4b5563' }}>↑ ← ↓ → to toggle</div>
     </div>
   )
 }
 
-// ─── Main Export ───
 export default function Scene3D() {
   const [shapes, setShapes] = useState(DEFAULT_SHAPES)
   const [menuOpen, setMenuOpen] = useState(false)
