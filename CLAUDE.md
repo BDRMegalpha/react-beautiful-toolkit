@@ -1,4 +1,11 @@
-# React Beautiful Toolkit
+# DashRadar (react-beautiful-toolkit)
+
+## Project: DashRadar — Geometry Dash Community Platform
+- Live URL: https://dashradar-app.web.app
+- Firebase project: dashradar-app
+- All data must be REAL from GDBrowser + Pointercrate APIs — no fake/placeholder data
+- Auto-refreshes every hour
+- Unique feature: Player vs Player comparison with radar charts (no other GD site has this)
 
 ## Stack — Always use React with these libraries
 

@@ -72,7 +72,7 @@ function NavBar() {
       </motion.div>
 
       <div className="flex items-center gap-3 sm:gap-6">
-        {['Compare', 'Leaderboards', 'Levels', 'Players', 'Tools'].map((item, i) => (
+        {['Players', 'Levels', 'Leaderboards', 'Tools'].map((item, i) => (
           <motion.a
             key={item}
             href={`#${item.toLowerCase()}`}
@@ -212,38 +212,18 @@ function App() {
         </motion.div>
       </section>
 
-      {/* ========== PLAYER VS PLAYER (UNIQUE FEATURE) ========== */}
-      <section id="compare" className="relative z-10 py-12 sm:py-20 px-4 sm:px-8">
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          className="text-center mb-8"
-        >
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black mb-4" style={{
-            background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}>
-            Player vs Player
-          </h2>
-          <p style={{ color: '#9ca3af' }} className="text-lg">Compare any two players head-to-head with radar charts and skill breakdowns</p>
-        </motion.div>
-        <PlayerCompare />
-      </section>
-
       {/* ========== STATS BAR ========== */}
       <section className="relative z-10 py-10 sm:py-16 px-4 sm:px-8">
         <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
-          <AnimatedCounter end={2500000} suffix="+" label="Active Players" color="#00ffff" />
-          <AnimatedCounter end={90000000} suffix="+" label="Levels Created" color="#ff00ff" />
-          <AnimatedCounter end={850} suffix="+" label="Demon Levels" color="#ff4444" />
-          <AnimatedCounter end={12} suffix="+" label="Years Running" color="#00ff88" />
+          <AnimatedCounter end={530} suffix="M+" label="Lifetime Downloads" color="#00ffff" />
+          <AnimatedCounter end={130} suffix="M+" label="Levels Created" color="#ff00ff" />
+          <AnimatedCounter end={10000} suffix="+" label="Demon Levels" color="#ff4444" />
+          <AnimatedCounter end={13} suffix="" label="Years Running" color="#00ff88" />
         </div>
       </section>
 
-      {/* ========== PLAYER SEARCH ========== */}
-      <section id="search" className="relative z-10 py-12 sm:py-20 px-4 sm:px-8">
+      {/* ========== PLAYERS SECTION (Search + Compare) ========== */}
+      <section id="players" className="relative z-10 py-12 sm:py-20 px-4 sm:px-8">
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
@@ -255,11 +235,26 @@ function App() {
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
           }}>
-            Find Any Player
+            Players
           </h2>
-          <p style={{ color: '#9ca3af' }} className="text-lg">Search stats, rankings, and achievements for millions of players</p>
+          <p style={{ color: '#9ca3af' }} className="text-lg">Look up any player or compare two head-to-head</p>
         </motion.div>
-        <PlayerSearch />
+
+        {/* Player Search */}
+        <div className="mb-16" id="search">
+          <h3 className="text-xl sm:text-2xl font-bold text-center mb-6" style={{ color: '#00ffff' }}>
+            Player Lookup
+          </h3>
+          <PlayerSearch />
+        </div>
+
+        {/* Player vs Player Compare */}
+        <div id="compare">
+          <h3 className="text-xl sm:text-2xl font-bold text-center mb-6" style={{ color: '#ff00ff' }}>
+            Player vs Player
+          </h3>
+          <PlayerCompare />
+        </div>
       </section>
 
       {/* ========== DAILY & WEEKLY LEVELS ========== */}
