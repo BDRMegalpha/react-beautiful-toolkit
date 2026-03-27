@@ -15,6 +15,7 @@ function LevelCard({ level, type, accent, delay = 0 }) {
       viewport={{ once: true }}
       transition={{ delay }}
       whileHover={{ scale: 1.03, y: -5 }}
+      onClick={() => level.levelID && window.open(`https://gdbrowser.com/${level.levelID}`, '_blank')}
       className="relative rounded-2xl overflow-hidden cursor-pointer group"
       style={{
         background: 'rgba(10, 10, 30, 0.9)',
@@ -99,17 +100,25 @@ function LevelCard({ level, type, accent, delay = 0 }) {
         </div>
       </div>
 
-      {/* Play button overlay */}
-      <motion.div
-        className="absolute top-4 right-4 w-12 h-12 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-        style={{
-          background: `linear-gradient(135deg, ${accent}, ${accent}88)`,
-          boxShadow: `0 0 20px ${accent}44`,
-        }}
-        whileHover={{ scale: 1.1 }}
-      >
-        <FiPlay size={20} color="#000" />
-      </motion.div>
+      {/* Play button overlay — opens level on GDBrowser */}
+      {level.levelID && (
+        <motion.a
+          href={`https://gdbrowser.com/${level.levelID}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute top-4 right-4 w-12 h-12 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{
+            background: `linear-gradient(135deg, ${accent}, ${accent}88)`,
+            boxShadow: `0 0 20px ${accent}44`,
+            textDecoration: 'none',
+          }}
+          whileHover={{ scale: 1.2 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <FiPlay size={20} color="#000" />
+        </motion.a>
+      )}
     </motion.div>
   )
 }

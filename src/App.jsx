@@ -76,8 +76,9 @@ function NavBar() {
           <motion.a
             key={item}
             href={`#${item.toLowerCase()}`}
-            className="text-sm font-medium transition-colors hidden md:block"
-            style={{ color: '#9ca3af' }}
+            onClick={(e) => { e.preventDefault(); document.getElementById(item.toLowerCase())?.scrollIntoView({ behavior: 'smooth' }) }}
+            className="text-sm font-medium transition-colors hidden md:block cursor-pointer"
+            style={{ color: '#9ca3af', textDecoration: 'none' }}
             whileHover={{ color: '#00ffff', y: -2 }}
           >
             {item}
@@ -180,7 +181,10 @@ function App() {
             >
               <FiZap /> Explore Now
             </motion.button>
-            <motion.button
+            <motion.a
+              href="https://github.com/BDRMegalpha/react-beautiful-toolkit"
+              target="_blank"
+              rel="noopener noreferrer"
               whileHover={{ scale: 1.05, borderColor: '#ff00ff' }}
               whileTap={{ scale: 0.95 }}
               className="px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-2 justify-center"
@@ -188,10 +192,11 @@ function App() {
                 background: 'transparent',
                 border: '2px solid rgba(255, 0, 255, 0.5)',
                 color: '#ff00ff',
+                textDecoration: 'none',
               }}
             >
               <FiGithub /> View on GitHub
-            </motion.button>
+            </motion.a>
           </motion.div>
 
           {/* Scroll indicator */}
@@ -337,18 +342,23 @@ function App() {
 
         <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[
-            { icon: <FiTarget size={28} />, title: 'Level Analyzer', desc: 'Deep-dive into any level\'s difficulty, objects, and structure with AI-powered analysis.', color: '#ff00ff' },
-            { icon: <FiTrendingUp size={28} />, title: 'Stat Tracker', desc: 'Track your progress over time with beautiful charts and insights.', color: '#00ffff' },
-            { icon: <FiUsers size={28} />, title: 'Crew Finder', desc: 'Find and join GD crews, challenge friends, and build your community.', color: '#00ff88' },
-            { icon: <FiMusic size={28} />, title: 'Song Explorer', desc: 'Browse and preview every Newgrounds and custom song used in GD.', color: '#ffff00' },
-            { icon: <FiCompass size={28} />, title: 'Level Explorer', desc: 'Discover hidden gems with smart filters for difficulty, length, and style.', color: '#ff8800' },
-            { icon: <FiShield size={28} />, title: 'Demon Tracker', desc: 'Track every demon you\'ve beaten and compare with the Pointercrate list.', color: '#ff4444' },
+            { icon: <FiTarget size={28} />, title: 'Level Analyzer', desc: 'Deep-dive into any level\'s difficulty, objects, and structure with AI-powered analysis.', color: '#ff00ff', action: () => toast.info('Level Analyzer coming soon! Stay tuned.') },
+            { icon: <FiTrendingUp size={28} />, title: 'Stat Tracker', desc: 'Track your progress over time with beautiful charts and insights.', color: '#00ffff', action: () => { document.getElementById('players')?.scrollIntoView({ behavior: 'smooth' }); toast.success('Use Player Lookup above to view stats!') } },
+            { icon: <FiUsers size={28} />, title: 'Crew Finder', desc: 'Find and join GD crews, challenge friends, and build your community.', color: '#00ff88', action: () => toast.info('Crew Finder coming soon! Stay tuned.') },
+            { icon: <FiMusic size={28} />, title: 'Song Explorer', desc: 'Browse and preview every Newgrounds and custom song used in GD.', color: '#ffff00', action: () => toast.info('Song Explorer coming soon! Stay tuned.') },
+            { icon: <FiCompass size={28} />, title: 'Level Explorer', desc: 'Discover hidden gems with smart filters for difficulty, length, and style.', color: '#ff8800', action: () => { document.getElementById('levels')?.scrollIntoView({ behavior: 'smooth' }) } },
+            { icon: <FiShield size={28} />, title: 'Demon Tracker', desc: 'Track every demon you\'ve beaten and compare with the Pointercrate list.', color: '#ff4444', action: () => toast.info('Demon Tracker coming soon! Stay tuned.') },
           ].map((feature, i) => (
-            <GlowCard key={feature.title} color={feature.color} delay={i * 0.1}>
-              <div className="mb-4" style={{ color: feature.color }}>{feature.icon}</div>
-              <h3 className="text-xl font-bold text-white mb-2">{feature.title}</h3>
-              <p style={{ color: '#9ca3af', fontSize: '0.9rem', lineHeight: 1.6 }}>{feature.desc}</p>
-            </GlowCard>
+            <div key={feature.title} onClick={feature.action}>
+              <GlowCard color={feature.color} delay={i * 0.1}>
+                <div className="mb-4" style={{ color: feature.color }}>{feature.icon}</div>
+                <h3 className="text-xl font-bold text-white mb-2">{feature.title}</h3>
+                <p style={{ color: '#9ca3af', fontSize: '0.9rem', lineHeight: 1.6 }}>{feature.desc}</p>
+                <div className="mt-3 text-xs font-bold uppercase tracking-wider" style={{ color: feature.color, opacity: 0.6 }}>
+                  {feature.title === 'Stat Tracker' || feature.title === 'Level Explorer' ? 'Click to go →' : 'Coming Soon'}
+                </div>
+              </GlowCard>
+            </div>
           ))}
         </div>
       </section>
@@ -392,7 +402,7 @@ function App() {
                 color: '#000',
                 boxShadow: '0 0 30px rgba(0, 255, 255, 0.3)',
               }}
-              onClick={() => toast.success('Welcome to DashRadar!')}
+              onClick={() => document.getElementById('players')?.scrollIntoView({ behavior: 'smooth' })}
             >
               Get Started <FiArrowRight />
             </motion.button>
@@ -408,7 +418,7 @@ function App() {
               className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm"
               style={{ background: 'linear-gradient(135deg, #00ffff, #ff00ff)', color: '#000' }}
             >
-              GD
+              DR
             </div>
             <span className="font-bold text-white">DashRadar</span>
           </div>
@@ -417,10 +427,10 @@ function App() {
             Not affiliated with RobTop Games.
           </p>
           <div className="flex gap-4">
-            <motion.a href="#" whileHover={{ color: '#00ffff', y: -2 }} style={{ color: '#6b7280' }}>
+            <motion.a href="https://github.com/BDRMegalpha/react-beautiful-toolkit" target="_blank" rel="noopener noreferrer" whileHover={{ color: '#00ffff', y: -2 }} style={{ color: '#6b7280' }}>
               <FiGithub size={20} />
             </motion.a>
-            <motion.a href="#" whileHover={{ color: '#00ffff', y: -2 }} style={{ color: '#6b7280' }}>
+            <motion.a href="https://dashradar-app.web.app" whileHover={{ color: '#00ffff', y: -2 }} style={{ color: '#6b7280' }}>
               <FiGlobe size={20} />
             </motion.a>
           </div>
