@@ -1,5 +1,3 @@
-// In dev, Vite proxies /gd-api → gdbrowser.com/api
-// In prod, we call GDBrowser directly (they allow CORS)
 const isDev = import.meta.env.DEV;
 const GD_BROWSER = isDev ? '/gd-api' : 'https://gdbrowser.com/api';
 const POINTERCRATE = 'https://pointercrate.com/api/v2';
@@ -10,6 +8,10 @@ export async function searchPlayer(query) {
   const res = await fetch(`${GD_BROWSER}/profile/${encodeURIComponent(query)}`);
   if (!res.ok) throw new Error('Player not found');
   return res.json();
+}
+
+export function getPlayerIconURL(username) {
+  return `https://gdbrowser.com/icon/${encodeURIComponent(username)}`;
 }
 
 // ──────────────── LEADERBOARD ────────────────
@@ -52,25 +54,36 @@ export async function getLevel(id) {
   return res.json();
 }
 
+// ──────────────── SONGS ────────────────
+
+export async function getSong(id) {
+  const res = await fetch(`${GD_BROWSER}/song/${id}`);
+  if (!res.ok) throw new Error('Song not found');
+  return res.json();
+}
+
 // ──────────────── POINTERCRATE DEMONS ────────────────
 
 export async function getTopDemons(limit = 50) {
-  const res = await fetch(`${POINTERCRATE}/demons/listed/?limit=${limit}`, {
+  // Pointercrate max limit per request is 100
+  const capped = Math.min(limit, 100);
+  const res = await fetch(`${POINTERCRATE}/demons/listed/?limit=${capped}`, {
     headers: { 'Accept': 'application/json' },
   });
   if (!res.ok) throw new Error('Failed to fetch demon list');
   return res.json();
 }
 
-export async function getDemonById(id) {
-  const res = await fetch(`${POINTERCRATE}/demons/${id}/`, {
+export async function getPointercrateRankings(limit = 50) {
+  const capped = Math.min(limit, 100);
+  const res = await fetch(`${POINTERCRATE}/players/ranking/?limit=${capped}`, {
     headers: { 'Accept': 'application/json' },
   });
-  if (!res.ok) throw new Error('Demon not found');
+  if (!res.ok) throw new Error('Failed to fetch rankings');
   return res.json();
 }
 
-// ──────────────── MAP UTILS ────────────────
+// ──────────────── UTILS ────────────────
 
 export function getDifficultyColor(diff) {
   const str = String(diff || '').toLowerCase();

@@ -1,107 +1,99 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Float, Stars, Text } from '@react-three/drei'
+import { Stars } from '@react-three/drei'
 import * as THREE from 'three'
+import { searchPlayer, getPlayerIconURL } from '../api/gd'
 
 // ─── Draggable shape with hover jiggle + throw physics ───
-function InteractiveShape({ position, color, children, shape = 'box' }) {
+function InteractiveShape({ position, color, children }) {
   const ref = useRef()
   const [hovered, setHovered] = useState(false)
-  const [dragging, setDragging] = useState(false)
+  const dragging = useRef(false)
   const velocity = useRef(new THREE.Vector3())
   const prevMouse = useRef(new THREE.Vector3())
   const basePos = useRef(new THREE.Vector3(...position))
   const { camera, gl } = useThree()
 
-  // Jiggle on hover
+  const getWorldPos = useCallback((clientX, clientY) => {
+    const rect = gl.domElement.getBoundingClientRect()
+    const ndc = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    const raycaster = new THREE.Raycaster()
+    raycaster.setFromCamera(ndc, camera)
+    const z = ref.current ? ref.current.position.z : position[2]
+    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -z)
+    const target = new THREE.Vector3()
+    raycaster.ray.intersectPlane(plane, target)
+    return target
+  }, [camera, gl, position])
+
   useFrame((state) => {
     if (!ref.current) return
     const t = state.clock.elapsedTime
 
-    if (hovered && !dragging) {
+    if (hovered && !dragging.current) {
       ref.current.rotation.x += Math.sin(t * 12) * 0.02
       ref.current.rotation.y += Math.cos(t * 10) * 0.02
       ref.current.scale.setScalar(1.15 + Math.sin(t * 8) * 0.05)
-    } else if (!dragging) {
+    } else if (!dragging.current) {
       ref.current.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05)
     }
 
-    // Apply velocity when thrown
-    if (!dragging && velocity.current.length() > 0.001) {
+    if (dragging.current) {
+      ref.current.scale.setScalar(1.2)
+    }
+
+    if (!dragging.current && velocity.current.length() > 0.001) {
       ref.current.position.add(velocity.current)
-      velocity.current.multiplyScalar(0.96) // friction
+      velocity.current.multiplyScalar(0.95)
       ref.current.rotation.x += velocity.current.x * 0.5
       ref.current.rotation.y += velocity.current.y * 0.5
-
-      // Slowly drift back to base position
-      const drift = basePos.current.clone().sub(ref.current.position).multiplyScalar(0.002)
+      const drift = basePos.current.clone().sub(ref.current.position).multiplyScalar(0.003)
       ref.current.position.add(drift)
     }
 
-    // Gentle float when idle
-    if (!dragging && velocity.current.length() < 0.001) {
+    if (!dragging.current && velocity.current.length() < 0.001) {
       ref.current.position.y = basePos.current.y + Math.sin(t * 0.5 + basePos.current.x) * 0.3
       ref.current.rotation.y += 0.003
     }
   })
 
-  const getWorldPos = useCallback((e) => {
-    const ndc = new THREE.Vector2(
-      (e.clientX / gl.domElement.clientWidth) * 2 - 1,
-      -(e.clientY / gl.domElement.clientHeight) * 2 + 1,
-    )
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(ndc, camera)
-    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -ref.current.position.z)
-    const target = new THREE.Vector3()
-    raycaster.ray.intersectPlane(plane, target)
-    return target
-  }, [camera, gl])
-
   const onPointerDown = useCallback((e) => {
     e.stopPropagation()
-    setDragging(true)
+    const ne = e.nativeEvent || e
+    dragging.current = true
     velocity.current.set(0, 0, 0)
-    prevMouse.current.copy(getWorldPos(e))
+    prevMouse.current.copy(getWorldPos(ne.clientX, ne.clientY))
     gl.domElement.style.cursor = 'grabbing'
-    gl.domElement.setPointerCapture(e.pointerId)
+    try { gl.domElement.setPointerCapture(ne.pointerId) } catch (_) {}
+
+    const onMove = (ev) => {
+      if (!dragging.current || !ref.current) return
+      const worldPos = getWorldPos(ev.clientX, ev.clientY)
+      const delta = worldPos.clone().sub(prevMouse.current)
+      ref.current.position.add(delta)
+      velocity.current.copy(delta.multiplyScalar(0.8))
+      prevMouse.current.copy(getWorldPos(ev.clientX, ev.clientY))
+    }
+    const onUp = (ev) => {
+      dragging.current = false
+      gl.domElement.style.cursor = 'default'
+      try { gl.domElement.releasePointerCapture(ev.pointerId) } catch (_) {}
+      gl.domElement.removeEventListener('pointermove', onMove)
+      gl.domElement.removeEventListener('pointerup', onUp)
+    }
+    gl.domElement.addEventListener('pointermove', onMove)
+    gl.domElement.addEventListener('pointerup', onUp)
   }, [getWorldPos, gl])
-
-  const onPointerMove = useCallback((e) => {
-    if (!dragging || !ref.current) return
-    const worldPos = getWorldPos(e)
-    const delta = worldPos.clone().sub(prevMouse.current)
-    ref.current.position.add(delta)
-    velocity.current.copy(delta.multiplyScalar(0.8))
-    prevMouse.current.copy(worldPos)
-  }, [dragging, getWorldPos])
-
-  const onPointerUp = useCallback((e) => {
-    setDragging(false)
-    gl.domElement.style.cursor = hovered ? 'grab' : 'default'
-    gl.domElement.releasePointerCapture(e.pointerId)
-  }, [gl, hovered])
-
-  useEffect(() => {
-    const el = gl.domElement
-    const move = (e) => onPointerMove(e)
-    const up = (e) => onPointerUp(e)
-    if (dragging) {
-      el.addEventListener('pointermove', move)
-      el.addEventListener('pointerup', up)
-    }
-    return () => {
-      el.removeEventListener('pointermove', move)
-      el.removeEventListener('pointerup', up)
-    }
-  }, [dragging, gl, onPointerMove, onPointerUp])
 
   return (
     <mesh
       ref={ref}
       position={position}
       onPointerOver={(e) => { e.stopPropagation(); setHovered(true); gl.domElement.style.cursor = 'grab' }}
-      onPointerOut={() => { setHovered(false); if (!dragging) gl.domElement.style.cursor = 'default' }}
+      onPointerOut={() => { setHovered(false); if (!dragging.current) gl.domElement.style.cursor = 'default' }}
       onPointerDown={onPointerDown}
     >
       {children}
@@ -117,63 +109,14 @@ function InteractiveShape({ position, color, children, shape = 'box' }) {
 }
 
 // ─── GD-themed shapes ───
-function GDCube(props) {
-  return (
-    <InteractiveShape {...props} shape="box">
-      <boxGeometry args={[1, 1, 1]} />
-    </InteractiveShape>
-  )
-}
+function GDCube(props) { return <InteractiveShape {...props}><boxGeometry args={[1, 1, 1]} /></InteractiveShape> }
+function GDDiamond(props) { return <InteractiveShape {...props}><octahedronGeometry args={[0.6, 0]} /></InteractiveShape> }
+function GDOrb(props) { return <InteractiveShape {...props}><sphereGeometry args={[0.5, 32, 32]} /></InteractiveShape> }
+function GDSpike(props) { return <InteractiveShape {...props}><coneGeometry args={[0.6, 1.2, 4]} /></InteractiveShape> }
+function GDRing(props) { return <InteractiveShape {...props}><torusGeometry args={[0.6, 0.15, 16, 48]} /></InteractiveShape> }
+function GDStar(props) { return <InteractiveShape {...props}><dodecahedronGeometry args={[0.5, 0]} /></InteractiveShape> }
+function GDPortal(props) { return <InteractiveShape {...props}><torusGeometry args={[0.7, 0.1, 8, 6]} /></InteractiveShape> }
 
-function GDDiamond({ position, color }) {
-  return (
-    <InteractiveShape position={position} color={color}>
-      <octahedronGeometry args={[0.6, 0]} />
-    </InteractiveShape>
-  )
-}
-
-function GDOrb({ position, color }) {
-  return (
-    <InteractiveShape position={position} color={color}>
-      <sphereGeometry args={[0.5, 32, 32]} />
-    </InteractiveShape>
-  )
-}
-
-function GDSpike({ position, color }) {
-  return (
-    <InteractiveShape position={position} color={color}>
-      <coneGeometry args={[0.6, 1.2, 4]} />
-    </InteractiveShape>
-  )
-}
-
-function GDRing({ position, color }) {
-  return (
-    <InteractiveShape position={position} color={color}>
-      <torusGeometry args={[0.6, 0.15, 16, 48]} />
-    </InteractiveShape>
-  )
-}
-
-function GDStar({ position, color }) {
-  return (
-    <InteractiveShape position={position} color={color}>
-      <dodecahedronGeometry args={[0.5, 0]} />
-    </InteractiveShape>
-  )
-}
-
-function GDPortal({ position, color }) {
-  return (
-    <InteractiveShape position={position} color={color}>
-      <torusGeometry args={[0.7, 0.1, 8, 6]} />
-    </InteractiveShape>
-  )
-}
-
-// ─── Floating particles ───
 function FloatingParticles() {
   const count = 200
   const positions = useMemo(() => {
@@ -193,7 +136,6 @@ function FloatingParticles() {
   )
 }
 
-// ─── Default scene shapes ───
 const DEFAULT_SHAPES = [
   { type: 'cube', position: [-3.5, 2, -2], color: '#00ffff' },
   { type: 'cube', position: [4, -1.5, -3], color: '#ff00ff' },
@@ -206,16 +148,12 @@ const DEFAULT_SHAPES = [
   { type: 'ring', position: [0, 0.5, -3], color: '#ff00ff' },
   { type: 'ring', position: [-3, 1, -4], color: '#00ff88' },
   { type: 'star', position: [4, 1, -4], color: '#ffff00' },
-  { type: 'star', position: [-4, -1.5, -3], color: '#00ffff' },
   { type: 'portal', position: [2.5, 3.5, -5], color: '#cc44ff' },
 ]
 
 function ShapeRenderer({ shape }) {
-  const Component = {
-    cube: GDCube, diamond: GDDiamond, orb: GDOrb,
-    spike: GDSpike, ring: GDRing, star: GDStar, portal: GDPortal,
-  }[shape.type] || GDCube
-  return <Component position={shape.position} color={shape.color} />
+  const C = { cube: GDCube, diamond: GDDiamond, orb: GDOrb, spike: GDSpike, ring: GDRing, star: GDStar, portal: GDPortal }[shape.type] || GDCube
+  return <C position={shape.position} color={shape.color} />
 }
 
 function SceneContent({ shapes }) {
@@ -225,16 +163,42 @@ function SceneContent({ shapes }) {
       <pointLight position={[5, 5, 5]} color="#00ffff" intensity={2} />
       <pointLight position={[-5, -3, 3]} color="#ff00ff" intensity={1.5} />
       <pointLight position={[0, 3, -5]} color="#ffff00" intensity={1} />
-      {shapes.map((s, i) => <ShapeRenderer key={i} shape={s} />)}
+      {shapes.map((s, i) => <ShapeRenderer key={`${s.type}-${i}`} shape={s} />)}
       <FloatingParticles />
       <Stars radius={50} depth={50} count={1000} factor={4} saturation={1} fade speed={1.5} />
     </>
   )
 }
 
-// ─── Secret Menu (Ctrl+Shift+D) ───
+// ─── Secret Menu (Arrow pattern: Up Left Down Right) ───
 function SecretMenu({ shapes, setShapes, open, setOpen }) {
-  const [username, setUsername] = useState('')
+  const [username, setUsername] = useState(() => localStorage.getItem('dr-username') || '')
+  const [profile, setProfile] = useState(null)
+  const [profileLoading, setProfileLoading] = useState(false)
+  const [profileError, setProfileError] = useState(null)
+
+  const handleLookup = async () => {
+    if (!username.trim()) return
+    setProfileLoading(true)
+    setProfileError(null)
+    localStorage.setItem('dr-username', username.trim())
+    try {
+      const data = await searchPlayer(username.trim())
+      setProfile(data)
+    } catch {
+      setProfileError('Player not found')
+      setProfile(null)
+    } finally {
+      setProfileLoading(false)
+    }
+  }
+
+  // Auto-load saved username on open
+  useEffect(() => {
+    if (open && username && !profile && !profileLoading) {
+      handleLookup()
+    }
+  }, [open])
 
   const addShape = (type, color) => {
     setShapes(prev => [...prev, {
@@ -243,8 +207,6 @@ function SecretMenu({ shapes, setShapes, open, setOpen }) {
       color,
     }])
   }
-
-  const resetShapes = () => setShapes(DEFAULT_SHAPES)
 
   if (!open) return null
 
@@ -259,26 +221,67 @@ function SecretMenu({ shapes, setShapes, open, setOpen }) {
       }}
     >
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-bold uppercase tracking-widest" style={{ color: '#00ffff' }}>
-          Secret Menu
-        </h3>
-        <button onClick={() => setOpen(false)} className="text-xs" style={{ color: '#6b7280' }}>ESC to close</button>
+        <h3 className="text-sm font-bold uppercase tracking-widest" style={{ color: '#00ffff' }}>Secret Menu</h3>
+        <button onClick={() => setOpen(false)} className="text-xs" style={{ color: '#6b7280' }}>ESC</button>
       </div>
 
-      {/* Username */}
+      {/* Profile Section */}
+      {profile && (
+        <div className="mb-4 p-3 rounded-xl" style={{ background: 'rgba(0,255,255,0.05)', border: '1px solid rgba(0,255,255,0.15)' }}>
+          <div className="flex items-center gap-3 mb-2">
+            <img
+              src={getPlayerIconURL(profile.username)}
+              alt={profile.username}
+              className="w-12 h-12 rounded-lg"
+              style={{ background: '#111', imageRendering: 'pixelated' }}
+            />
+            <div>
+              <div className="font-bold text-white text-sm">{profile.username}</div>
+              <div className="text-xs" style={{ color: '#00ffff' }}>Rank #{profile.rank || '???'}</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-1 text-center">
+            {[
+              { v: profile.stars, l: '★', c: '#ffff00' },
+              { v: profile.demons, l: '👿', c: '#ff4444' },
+              { v: profile.cp, l: 'Cr.Pts', c: '#00ff88' },
+              { v: profile.diamonds, l: '💎', c: '#00ccff' },
+            ].map(s => (
+              <div key={s.l} className="text-xs">
+                <div className="font-bold" style={{ color: s.c }}>{Number(s.v || 0).toLocaleString()}</div>
+                <div style={{ color: '#6b7280', fontSize: '9px' }}>{s.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Username Input */}
       <div className="mb-4">
         <label className="text-xs block mb-1" style={{ color: '#9ca3af' }}>Your GD Username</label>
-        <input
-          type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="Enter username..."
-          className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(0,255,255,0.2)', color: '#fff' }}
-        />
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+            placeholder="Enter username..."
+            className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
+            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(0,255,255,0.2)', color: '#fff' }}
+          />
+          <button
+            onClick={handleLookup}
+            disabled={profileLoading}
+            className="px-3 py-2 rounded-lg text-xs font-bold"
+            style={{ background: 'linear-gradient(135deg, #00ffff, #ff00ff)', color: '#000' }}
+          >
+            {profileLoading ? '...' : 'Go'}
+          </button>
+        </div>
+        {profileError && <div className="text-xs mt-1" style={{ color: '#ff4444' }}>{profileError}</div>}
       </div>
 
-      {/* Add shapes */}
+      {/* Add Shapes */}
       <div className="mb-4">
         <label className="text-xs block mb-2" style={{ color: '#9ca3af' }}>Add GD Objects</label>
         <div className="grid grid-cols-3 gap-2">
@@ -303,37 +306,34 @@ function SecretMenu({ shapes, setShapes, open, setOpen }) {
         </div>
       </div>
 
-      {/* Color picker for custom shapes */}
+      {/* Custom Colors */}
       <div className="mb-4">
-        <label className="text-xs block mb-2" style={{ color: '#9ca3af' }}>Custom Color Shape</label>
+        <label className="text-xs block mb-2" style={{ color: '#9ca3af' }}>Custom Color</label>
         <div className="flex gap-2">
           {['#ff0000', '#00ff00', '#0000ff', '#ffffff', '#ff8800', '#8800ff'].map(c => (
             <button
               key={c}
               onClick={() => addShape('cube', c)}
-              className="w-8 h-8 rounded-lg border-2 hover:scale-110 transition-transform"
+              className="w-7 h-7 rounded-lg border-2 hover:scale-110 transition-transform"
               style={{ background: c, borderColor: `${c}88` }}
             />
           ))}
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="mb-4 text-xs" style={{ color: '#6b7280' }}>
-        Objects in scene: <span style={{ color: '#00ffff' }}>{shapes.length}</span>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs" style={{ color: '#6b7280' }}>Objects: <span style={{ color: '#00ffff' }}>{shapes.length}</span></span>
+        <button
+          onClick={() => setShapes(DEFAULT_SHAPES)}
+          className="px-3 py-1 rounded-lg text-xs font-bold"
+          style={{ background: 'rgba(255,68,68,0.15)', border: '1px solid rgba(255,68,68,0.3)', color: '#ff4444' }}
+        >
+          Reset
+        </button>
       </div>
 
-      {/* Reset */}
-      <button
-        onClick={resetShapes}
-        className="w-full px-3 py-2 rounded-lg text-xs font-bold"
-        style={{ background: 'rgba(255,68,68,0.15)', border: '1px solid rgba(255,68,68,0.3)', color: '#ff4444' }}
-      >
-        Reset to Default
-      </button>
-
-      <div className="mt-3 text-center text-xs" style={{ color: '#4b5563' }}>
-        Ctrl+Shift+D to toggle
+      <div className="text-center text-xs" style={{ color: '#4b5563' }}>
+        ↑ ← ↓ → to toggle
       </div>
     </div>
   )
@@ -344,16 +344,32 @@ export default function Scene3D() {
   const [shapes, setShapes] = useState(DEFAULT_SHAPES)
   const [menuOpen, setMenuOpen] = useState(false)
 
+  // Arrow key pattern: Up, Left, Down, Right
   useEffect(() => {
+    const PATTERN = ['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight']
+    let buffer = []
+    let timer = null
+
     const handler = (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
-        e.preventDefault()
-        setMenuOpen(prev => !prev)
+      if (e.key === 'Escape') { setMenuOpen(false); return }
+
+      if (PATTERN.includes(e.key)) {
+        buffer.push(e.key)
+        clearTimeout(timer)
+        timer = setTimeout(() => { buffer = [] }, 2000) // reset after 2s of inactivity
+
+        if (buffer.length >= PATTERN.length) {
+          const last4 = buffer.slice(-PATTERN.length)
+          if (last4.every((k, i) => k === PATTERN[i])) {
+            e.preventDefault()
+            setMenuOpen(prev => !prev)
+            buffer = []
+          }
+        }
       }
-      if (e.key === 'Escape') setMenuOpen(false)
     }
     window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    return () => { window.removeEventListener('keydown', handler); clearTimeout(timer) }
   }, [])
 
   return (

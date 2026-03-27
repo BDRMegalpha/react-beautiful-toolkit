@@ -50,7 +50,7 @@ function buildBarData(a, b) {
   return [
     { stat: 'Stars', A: sa.stars, B: sb.stars },
     { stat: 'Demons', A: sa.demons, B: sb.demons },
-    { stat: 'CP', A: sa.cp, B: sb.cp },
+    { stat: 'Creator Pts', A: sa.cp, B: sb.cp },
     { stat: 'Diamonds', A: sa.diamonds, B: sb.diamonds },
     { stat: 'User Coins', A: sa.userCoins, B: sb.userCoins },
     { stat: 'Moons', A: sa.moons, B: sb.moons },
