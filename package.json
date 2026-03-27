@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "launch": "node scripts/launch-browser.js"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -27,8 +28,11 @@
     "chart.js": "^4.5.1",
     "clsx": "^2.1.1",
     "d3": "^7.9.0",
+    "firebase": "^12.11.0",
     "framer-motion": "^12.38.0",
+    "gd.js": "^0.2.13",
     "lucide-react": "^1.7.0",
+    "playwright": "^1.58.2",
     "react": "^19.2.4",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.4",

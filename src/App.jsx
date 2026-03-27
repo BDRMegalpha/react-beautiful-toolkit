@@ -1,239 +1,395 @@
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { ThemeProvider, createTheme } from '@mui/material/styles'
-import { Button, Card, CardContent, Typography, Chip, Switch, CssBaseline } from '@mui/material'
-import { FiSun, FiMoon, FiBarChart2, FiLayers, FiZap, FiBox } from 'react-icons/fi'
-import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart
-} from 'recharts'
+import { useEffect, useState, useRef } from 'react'
+import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion'
+import Scene3D from './components/Scene3D'
+import NeonText from './components/NeonText'
+import GlowCard from './components/GlowCard'
+import AnimatedCounter from './components/AnimatedCounter'
+import PlayerSearch from './components/PlayerSearch'
+import Leaderboard from './components/Leaderboard'
+import DailyLevel from './components/DailyLevel'
+import { FiZap, FiUsers, FiTrendingUp, FiGlobe, FiArrowRight, FiGithub, FiStar, FiTarget, FiCpu, FiMusic, FiCompass, FiShield } from 'react-icons/fi'
 import { Toaster, toast } from 'sonner'
-import './App.css'
+import './index.css'
 
-const chartData = [
-  { name: 'Jan', value: 400, sales: 240, growth: 100 },
-  { name: 'Feb', value: 300, sales: 139, growth: 200 },
-  { name: 'Mar', value: 600, sales: 980, growth: 350 },
-  { name: 'Apr', value: 800, sales: 390, growth: 480 },
-  { name: 'May', value: 500, sales: 480, growth: 520 },
-  { name: 'Jun', value: 900, sales: 380, growth: 610 },
-]
+function PulsingOrb({ color, size, top, left, delay = 0 }) {
+  return (
+    <motion.div
+      className="absolute rounded-full pointer-events-none"
+      animate={{
+        scale: [1, 1.3, 1],
+        opacity: [0.15, 0.35, 0.15],
+      }}
+      transition={{ repeat: Infinity, duration: 4, delay }}
+      style={{
+        width: size,
+        height: size,
+        top,
+        left,
+        background: `radial-gradient(circle, ${color}44, transparent 70%)`,
+        filter: `blur(40px)`,
+      }}
+    />
+  )
+}
 
-const pieData = [
-  { name: 'React', value: 40, color: '#6366f1' },
-  { name: 'Charts', value: 25, color: '#8b5cf6' },
-  { name: 'Design', value: 20, color: '#a78bfa' },
-  { name: 'Motion', value: 15, color: '#c4b5fd' },
-]
+function NavBar() {
+  const [scrolled, setScrolled] = useState(false)
 
-const features = [
-  { icon: <FiBarChart2 />, title: 'Recharts + Chart.js + Nivo', desc: 'Multiple charting libraries for any visualization need' },
-  { icon: <FiLayers />, title: 'Material UI + Tailwind', desc: 'Beautiful components with utility-first styling' },
-  { icon: <FiZap />, title: 'Framer Motion + React Spring', desc: 'Smooth animations and transitions' },
-  { icon: <FiBox />, title: 'Three.js (R3F)', desc: '3D graphics and WebGL right in React' },
-]
-
-function App() {
-  const [darkMode, setDarkMode] = useState(true)
-
-  const theme = createTheme({
-    palette: {
-      mode: darkMode ? 'dark' : 'light',
-      primary: { main: '#6366f1' },
-      secondary: { main: '#8b5cf6' },
-    },
-    shape: { borderRadius: 12 },
-    typography: { fontFamily: 'system-ui, -apple-system, sans-serif' },
-  })
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 50)
+    window.addEventListener('scroll', onScroll)
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Toaster richColors position="top-right" theme={darkMode ? 'dark' : 'light'} />
-      <div className={`min-h-screen transition-colors duration-500 ${darkMode ? 'bg-gray-950 text-white' : 'bg-gray-50 text-gray-900'}`}>
-
-        {/* Header */}
-        <motion.header
-          initial={{ y: -40, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          className="flex items-center justify-between px-8 py-6 max-w-7xl mx-auto"
+    <motion.nav
+      initial={{ y: -100 }}
+      animate={{ y: 0 }}
+      transition={{ type: 'spring', stiffness: 100 }}
+      className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-4 transition-all duration-300"
+      style={{
+        background: scrolled ? 'rgba(5, 5, 20, 0.9)' : 'transparent',
+        backdropFilter: scrolled ? 'blur(20px)' : 'none',
+        borderBottom: scrolled ? '1px solid rgba(0, 255, 255, 0.1)' : 'none',
+      }}
+    >
+      <motion.div className="flex items-center gap-3" whileHover={{ scale: 1.05 }}>
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg"
+          style={{
+            background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
+            color: '#000',
+            boxShadow: '0 0 20px rgba(0, 255, 255, 0.3)',
+          }}
         >
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
-            React Beautiful Toolkit
-          </h1>
-          <div className="flex items-center gap-2">
-            <FiSun className="text-yellow-400" />
-            <Switch checked={darkMode} onChange={() => setDarkMode(!darkMode)} color="secondary" />
-            <FiMoon className="text-indigo-400" />
-          </div>
-        </motion.header>
+          GD
+        </div>
+        <span className="font-bold text-xl text-white hidden sm:block">
+          GD<span style={{ color: '#00ffff' }}>Nexus</span>
+        </span>
+      </motion.div>
 
-        {/* Hero */}
-        <motion.section
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.6 }}
-          className="text-center py-16 px-8 max-w-4xl mx-auto"
+      <div className="flex items-center gap-6">
+        {['Leaderboards', 'Levels', 'Players', 'Tools'].map((item, i) => (
+          <motion.a
+            key={item}
+            href={`#${item.toLowerCase()}`}
+            className="text-sm font-medium transition-colors hidden md:block"
+            style={{ color: '#9ca3af' }}
+            whileHover={{ color: '#00ffff', y: -2 }}
+          >
+            {item}
+          </motion.a>
+        ))}
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="px-4 py-2 rounded-xl text-sm font-bold"
+          style={{
+            background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
+            color: '#000',
+            boxShadow: '0 0 15px rgba(0, 255, 255, 0.3)',
+          }}
+          onClick={() => toast.success('Sign up coming soon!')}
         >
-          <h2 className="text-5xl font-bold mb-6 bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-            Build Beautiful Things
-          </h2>
-          <p className={`text-xl mb-8 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Your React toolkit with charts, UI components, animations, 3D, and more — all pre-configured and ready to go.
-          </p>
-          <div className="flex gap-3 justify-center flex-wrap">
-            {['Recharts', 'Chart.js', 'D3', 'Victory', 'Nivo', 'MUI', 'Tailwind', 'Framer Motion', 'Three.js', 'React Spring'].map((lib) => (
-              <Chip key={lib} label={lib} variant="outlined" color="primary" size="small"
-                onClick={() => toast.success(`${lib} is installed and ready!`)} />
-            ))}
+          Join Now
+        </motion.button>
+      </div>
+    </motion.nav>
+  )
+}
+
+function App() {
+  const heroRef = useRef(null)
+  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] })
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.5], [1, 0])
+  const heroScale = useTransform(scrollYProgress, [0, 0.5], [1, 0.9])
+  const heroY = useTransform(scrollYProgress, [0, 0.5], [0, -100])
+
+  return (
+    <div className="min-h-screen" style={{ background: '#050514', color: '#fff', overflowX: 'hidden' }}>
+      <Toaster richColors position="top-right" theme="dark" />
+      <NavBar />
+
+      {/* Background Orbs */}
+      <PulsingOrb color="#00ffff" size="600px" top="-200px" left="-200px" />
+      <PulsingOrb color="#ff00ff" size="500px" top="300px" left="70%" delay={1} />
+      <PulsingOrb color="#ffff00" size="400px" top="800px" left="10%" delay={2} />
+      <PulsingOrb color="#00ff88" size="450px" top="1500px" left="60%" delay={1.5} />
+      <PulsingOrb color="#ff00ff" size="500px" top="2200px" left="20%" delay={0.5} />
+
+      {/* ========== HERO ========== */}
+      <section ref={heroRef} className="relative min-h-screen flex items-center justify-center overflow-hidden">
+        <Scene3D />
+
+        {/* Dark overlay for readability */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#050514]" style={{ zIndex: 1 }} />
+
+        <motion.div
+          style={{ opacity: heroOpacity, scale: heroScale, y: heroY }}
+          className="relative z-10 text-center px-6 max-w-5xl mx-auto"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="inline-block px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest mb-8"
+            style={{
+              background: 'rgba(0, 255, 255, 0.1)',
+              border: '1px solid rgba(0, 255, 255, 0.3)',
+              color: '#00ffff',
+            }}
+          >
+            The Ultimate Geometry Dash Hub
+          </motion.div>
+
+          <div className="mb-6">
+            <NeonText color="#00ffff" size="clamp(2.5rem, 6vw, 5rem)" delay={0.5}>GD</NeonText>
+            <NeonText color="#ff00ff" size="clamp(2.5rem, 6vw, 5rem)" delay={0.7}>Nexus</NeonText>
           </div>
-        </motion.section>
 
-        {/* Charts Grid */}
-        <section className="max-w-7xl mx-auto px-8 py-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Bar Chart */}
-          <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
-            <Card sx={{ bgcolor: darkMode ? '#1e1b4b22' : '#fff', backdropFilter: 'blur(10px)', border: '1px solid', borderColor: darkMode ? '#6366f133' : '#e5e7eb' }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>Revenue Overview</Typography>
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#374151' : '#e5e7eb'} />
-                    <XAxis dataKey="name" stroke={darkMode ? '#9ca3af' : '#6b7280'} />
-                    <YAxis stroke={darkMode ? '#9ca3af' : '#6b7280'} />
-                    <Tooltip contentStyle={{ background: darkMode ? '#1f2937' : '#fff', border: 'none', borderRadius: 8 }} />
-                    <Bar dataKey="value" fill="#6366f1" radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="sales" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1 }}
+            className="text-lg md:text-xl max-w-2xl mx-auto mb-10"
+            style={{ color: '#9ca3af', lineHeight: 1.7 }}
+          >
+            Track players. Discover levels. Climb leaderboards.
+            The most advanced Geometry Dash community platform ever built.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.2 }}
+            className="flex flex-col sm:flex-row gap-4 justify-center"
+          >
+            <motion.button
+              whileHover={{ scale: 1.05, boxShadow: '0 0 40px rgba(0, 255, 255, 0.4)' }}
+              whileTap={{ scale: 0.95 }}
+              className="px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-2 justify-center"
+              style={{
+                background: 'linear-gradient(135deg, #00ffff, #00ff88)',
+                color: '#000',
+                boxShadow: '0 0 25px rgba(0, 255, 255, 0.3)',
+              }}
+              onClick={() => document.getElementById('search')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              <FiZap /> Explore Now
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05, borderColor: '#ff00ff' }}
+              whileTap={{ scale: 0.95 }}
+              className="px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-2 justify-center"
+              style={{
+                background: 'transparent',
+                border: '2px solid rgba(255, 0, 255, 0.5)',
+                color: '#ff00ff',
+              }}
+            >
+              <FiGithub /> View on GitHub
+            </motion.button>
           </motion.div>
 
-          {/* Area Chart */}
-          <motion.div initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
-            <Card sx={{ bgcolor: darkMode ? '#1e1b4b22' : '#fff', backdropFilter: 'blur(10px)', border: '1px solid', borderColor: darkMode ? '#6366f133' : '#e5e7eb' }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>Growth Trend</Typography>
-                <ResponsiveContainer width="100%" height={250}>
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="colorGrowth" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#374151' : '#e5e7eb'} />
-                    <XAxis dataKey="name" stroke={darkMode ? '#9ca3af' : '#6b7280'} />
-                    <YAxis stroke={darkMode ? '#9ca3af' : '#6b7280'} />
-                    <Tooltip contentStyle={{ background: darkMode ? '#1f2937' : '#fff', border: 'none', borderRadius: 8 }} />
-                    <Area type="monotone" dataKey="growth" stroke="#8b5cf6" fill="url(#colorGrowth)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Line Chart */}
-          <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
-            <Card sx={{ bgcolor: darkMode ? '#1e1b4b22' : '#fff', backdropFilter: 'blur(10px)', border: '1px solid', borderColor: darkMode ? '#6366f133' : '#e5e7eb' }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>Performance Metrics</Typography>
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#374151' : '#e5e7eb'} />
-                    <XAxis dataKey="name" stroke={darkMode ? '#9ca3af' : '#6b7280'} />
-                    <YAxis stroke={darkMode ? '#9ca3af' : '#6b7280'} />
-                    <Tooltip contentStyle={{ background: darkMode ? '#1f2937' : '#fff', border: 'none', borderRadius: 8 }} />
-                    <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={3} dot={{ fill: '#6366f1', r: 5 }} />
-                    <Line type="monotone" dataKey="sales" stroke="#a78bfa" strokeWidth={3} dot={{ fill: '#a78bfa', r: 5 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Pie Chart */}
-          <motion.div initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
-            <Card sx={{ bgcolor: darkMode ? '#1e1b4b22' : '#fff', backdropFilter: 'blur(10px)', border: '1px solid', borderColor: darkMode ? '#6366f133' : '#e5e7eb' }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>Tech Distribution</Typography>
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={4} dataKey="value">
-                      {pieData.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: darkMode ? '#1f2937' : '#fff', border: 'none', borderRadius: 8 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </section>
-
-        {/* Features */}
-        <section className="max-w-7xl mx-auto px-8 py-16">
-          <h3 className="text-3xl font-bold text-center mb-12 bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-            What's Included
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {features.map((f, i) => (
+          {/* Scroll indicator */}
+          <motion.div
+            className="mt-16"
+            animate={{ y: [0, 10, 0] }}
+            transition={{ repeat: Infinity, duration: 2 }}
+          >
+            <div className="w-6 h-10 rounded-full border-2 mx-auto flex justify-center pt-2" style={{ borderColor: '#00ffff44' }}>
               <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                whileHover={{ scale: 1.03, y: -5 }}
-              >
-                <Card sx={{
-                  height: '100%',
-                  bgcolor: darkMode ? '#1e1b4b22' : '#fff',
-                  backdropFilter: 'blur(10px)',
-                  border: '1px solid',
-                  borderColor: darkMode ? '#6366f133' : '#e5e7eb',
-                  transition: 'all 0.3s',
-                  '&:hover': { borderColor: '#6366f1' }
-                }}>
-                  <CardContent className="text-center">
-                    <div className="text-3xl text-indigo-500 mb-3 flex justify-center">{f.icon}</div>
-                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>{f.title}</Typography>
-                    <Typography variant="body2" color="text.secondary">{f.desc}</Typography>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </section>
+                className="w-1.5 h-3 rounded-full"
+                style={{ background: '#00ffff' }}
+                animate={{ y: [0, 12, 0], opacity: [1, 0, 1] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+              />
+            </div>
+          </motion.div>
+        </motion.div>
+      </section>
 
-        {/* CTA */}
-        <motion.section
+      {/* ========== STATS BAR ========== */}
+      <section className="relative z-10 py-16 px-8">
+        <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
+          <AnimatedCounter end={2500000} suffix="+" label="Active Players" color="#00ffff" />
+          <AnimatedCounter end={90000000} suffix="+" label="Levels Created" color="#ff00ff" />
+          <AnimatedCounter end={850} suffix="+" label="Demon Levels" color="#ff4444" />
+          <AnimatedCounter end={12} suffix="+" label="Years Running" color="#00ff88" />
+        </div>
+      </section>
+
+      {/* ========== PLAYER SEARCH ========== */}
+      <section id="search" className="relative z-10 py-20 px-8">
+        <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          className="text-center py-16 px-8"
+          className="text-center mb-12"
         >
-          <Button
-            variant="contained"
-            size="large"
-            onClick={() => toast.success('Happy building! All libraries are ready to use.')}
-            sx={{
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              px: 4, py: 1.5, fontSize: '1.1rem',
-              '&:hover': { background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }
-            }}
-          >
-            Start Building
-          </Button>
-        </motion.section>
+          <h2 className="text-4xl md:text-5xl font-black mb-4" style={{
+            background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            Find Any Player
+          </h2>
+          <p style={{ color: '#9ca3af' }} className="text-lg">Search stats, rankings, and achievements for millions of players</p>
+        </motion.div>
+        <PlayerSearch />
+      </section>
 
-        <footer className={`text-center py-8 text-sm ${darkMode ? 'text-gray-600' : 'text-gray-400'}`}>
-          React Beautiful Toolkit — Built with React + Vite
-        </footer>
-      </div>
-    </ThemeProvider>
+      {/* ========== DAILY & WEEKLY LEVELS ========== */}
+      <section id="levels" className="relative z-10 py-20 px-8">
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          className="text-center mb-12"
+        >
+          <h2 className="text-4xl md:text-5xl font-black mb-4" style={{
+            background: 'linear-gradient(135deg, #ff0044, #ff00ff)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            Featured Levels
+          </h2>
+          <p style={{ color: '#9ca3af' }} className="text-lg">Today's daily and weekly challenges</p>
+        </motion.div>
+        <DailyLevel />
+      </section>
+
+      {/* ========== LEADERBOARD ========== */}
+      <section id="leaderboards" className="relative z-10 py-20 px-8">
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          className="text-center mb-12"
+        >
+          <h2 className="text-4xl md:text-5xl font-black mb-4" style={{
+            background: 'linear-gradient(135deg, #ffff00, #ff8800)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            Global Leaderboard
+          </h2>
+          <p style={{ color: '#9ca3af' }} className="text-lg">Top players ranked by stars and demons beaten</p>
+        </motion.div>
+        <Leaderboard />
+      </section>
+
+      {/* ========== FEATURES GRID ========== */}
+      <section id="tools" className="relative z-10 py-20 px-8">
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          className="text-center mb-16"
+        >
+          <h2 className="text-4xl md:text-5xl font-black mb-4" style={{
+            background: 'linear-gradient(135deg, #00ff88, #00ffff)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            Powerful Tools
+          </h2>
+          <p style={{ color: '#9ca3af' }} className="text-lg">Everything you need to dominate Geometry Dash</p>
+        </motion.div>
+
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[
+            { icon: <FiTarget size={28} />, title: 'Level Analyzer', desc: 'Deep-dive into any level\'s difficulty, objects, and structure with AI-powered analysis.', color: '#ff00ff' },
+            { icon: <FiTrendingUp size={28} />, title: 'Stat Tracker', desc: 'Track your progress over time with beautiful charts and insights.', color: '#00ffff' },
+            { icon: <FiUsers size={28} />, title: 'Crew Finder', desc: 'Find and join GD crews, challenge friends, and build your community.', color: '#00ff88' },
+            { icon: <FiMusic size={28} />, title: 'Song Explorer', desc: 'Browse and preview every Newgrounds and custom song used in GD.', color: '#ffff00' },
+            { icon: <FiCompass size={28} />, title: 'Level Explorer', desc: 'Discover hidden gems with smart filters for difficulty, length, and style.', color: '#ff8800' },
+            { icon: <FiShield size={28} />, title: 'Demon Tracker', desc: 'Track every demon you\'ve beaten and compare with the Pointercrate list.', color: '#ff4444' },
+          ].map((feature, i) => (
+            <GlowCard key={feature.title} color={feature.color} delay={i * 0.1}>
+              <div className="mb-4" style={{ color: feature.color }}>{feature.icon}</div>
+              <h3 className="text-xl font-bold text-white mb-2">{feature.title}</h3>
+              <p style={{ color: '#9ca3af', fontSize: '0.9rem', lineHeight: 1.6 }}>{feature.desc}</p>
+            </GlowCard>
+          ))}
+        </div>
+      </section>
+
+      {/* ========== CTA ========== */}
+      <section className="relative z-10 py-24 px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="max-w-3xl mx-auto text-center rounded-3xl p-12 relative overflow-hidden"
+          style={{
+            background: 'rgba(10, 10, 30, 0.8)',
+            border: '1px solid rgba(0, 255, 255, 0.2)',
+            backdropFilter: 'blur(20px)',
+          }}
+        >
+          <motion.div
+            className="absolute inset-0 opacity-20"
+            animate={{
+              background: [
+                'radial-gradient(circle at 20% 50%, #00ffff33, transparent 50%)',
+                'radial-gradient(circle at 80% 50%, #ff00ff33, transparent 50%)',
+                'radial-gradient(circle at 50% 20%, #00ff8833, transparent 50%)',
+                'radial-gradient(circle at 20% 50%, #00ffff33, transparent 50%)',
+              ],
+            }}
+            transition={{ repeat: Infinity, duration: 6 }}
+          />
+          <div className="relative z-10">
+            <h2 className="text-4xl md:text-5xl font-black mb-4 text-white">Ready to Dash?</h2>
+            <p className="text-lg mb-8" style={{ color: '#9ca3af' }}>
+              Join thousands of players already using GDNexus to level up their game.
+            </p>
+            <motion.button
+              whileHover={{ scale: 1.05, boxShadow: '0 0 50px rgba(0, 255, 255, 0.5)' }}
+              whileTap={{ scale: 0.95 }}
+              className="px-10 py-4 rounded-2xl font-bold text-lg inline-flex items-center gap-2"
+              style={{
+                background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
+                color: '#000',
+                boxShadow: '0 0 30px rgba(0, 255, 255, 0.3)',
+              }}
+              onClick={() => toast.success('Welcome to GDNexus!')}
+            >
+              Get Started <FiArrowRight />
+            </motion.button>
+          </div>
+        </motion.div>
+      </section>
+
+      {/* ========== FOOTER ========== */}
+      <footer className="relative z-10 py-12 px-8" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm"
+              style={{ background: 'linear-gradient(135deg, #00ffff, #ff00ff)', color: '#000' }}
+            >
+              GD
+            </div>
+            <span className="font-bold text-white">GDNexus</span>
+          </div>
+          <p style={{ color: '#4b5563', fontSize: '0.85rem' }}>
+            Built with React, Three.js, and Framer Motion.
+            Not affiliated with RobTop Games.
+          </p>
+          <div className="flex gap-4">
+            <motion.a href="#" whileHover={{ color: '#00ffff', y: -2 }} style={{ color: '#6b7280' }}>
+              <FiGithub size={20} />
+            </motion.a>
+            <motion.a href="#" whileHover={{ color: '#00ffff', y: -2 }} style={{ color: '#6b7280' }}>
+              <FiGlobe size={20} />
+            </motion.a>
+          </div>
+        </div>
+      </footer>
+    </div>
   )
 }
 
