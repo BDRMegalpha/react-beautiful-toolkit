@@ -1,78 +1,19 @@
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react'
-import { Canvas, useFrame, useThree, extend } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Stars } from '@react-three/drei'
 import * as THREE from 'three'
 import { searchPlayer, getPlayerIconURL } from '../api/gd'
 
 /*
-  3D Drag: Each shape uses R3F's onPointerDown. A full-screen transparent
-  plane is rendered in front of everything. When dragging starts on a shape,
-  the plane becomes active and captures onPointerMove/onPointerUp events,
-  computing the drag position via ray-plane intersection.
+  Drag system:
+  - Shapes have onPointerDown → sets dragging state + stores target mesh
+  - A DragCatcher plane ONLY renders when dragging is active
+  - DragCatcher captures onPointerMove/Up and moves the target mesh
+  - When not dragging, the plane is gone so shapes receive all events normally
 */
 
-// ─── Shared drag state ───
-const useDragStore = () => {
-  const state = useMemo(() => ({
-    active: false,
-    target: null,
-    plane: new THREE.Plane(),
-    offset: new THREE.Vector3(),
-    velocity: new THREE.Vector3(),
-    lastPos: new THREE.Vector3(),
-  }), [])
-  return state
-}
-
-// ─── Catch-all transparent plane for drag ───
-function DragCatcher({ drag }) {
-  const meshRef = useRef()
-  const { camera } = useThree()
-
-  // Keep plane facing camera
-  useFrame(() => {
-    if (meshRef.current) {
-      meshRef.current.quaternion.copy(camera.quaternion)
-      meshRef.current.position.set(0, 0, 0)
-    }
-  })
-
-  const onMove = useCallback((e) => {
-    if (!drag.active || !drag.target) return
-    e.stopPropagation()
-    const newPos = e.point.clone().add(drag.offset)
-    drag.velocity.copy(newPos).sub(drag.target.position)
-    drag.target.position.copy(newPos)
-    drag.lastPos.copy(e.point)
-  }, [drag])
-
-  const onUp = useCallback((e) => {
-    if (!drag.active || !drag.target) return
-    e.stopPropagation()
-    // Store throw velocity on the mesh
-    drag.target.userData._throwVel = drag.velocity.clone().multiplyScalar(0.8)
-    drag.target.userData._throwTime = 3
-    drag.target.userData._dragging = false
-    drag.active = false
-    drag.target = null
-    document.body.style.cursor = 'default'
-  }, [drag])
-
-  return (
-    <mesh
-      ref={meshRef}
-      onPointerMove={drag.active ? onMove : undefined}
-      onPointerUp={drag.active ? onUp : undefined}
-      renderOrder={-1}
-    >
-      <planeGeometry args={[200, 200]} />
-      <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
-    </mesh>
-  )
-}
-
 // ─── Interactive shape ───
-function InteractiveShape({ position, color, drag, children }) {
+function InteractiveShape({ position, color, onStartDrag, children }) {
   const ref = useRef()
   const basePos = useRef(new THREE.Vector3(...position))
   const [hovered, setHovered] = useState(false)
@@ -82,13 +23,11 @@ function InteractiveShape({ position, color, drag, children }) {
     const t = state.clock.elapsedTime
     const ud = ref.current.userData
 
-    // Being dragged
     if (ud._dragging) {
       ref.current.scale.setScalar(1.3)
       return
     }
 
-    // Throw physics
     if (ud._throwTime > 0) {
       ud._throwTime -= 0.016
       const vel = ud._throwVel
@@ -104,7 +43,6 @@ function InteractiveShape({ position, color, drag, children }) {
       return
     }
 
-    // Hover jiggle
     if (hovered) {
       ref.current.rotation.x += Math.sin(t * 15) * 0.04
       ref.current.rotation.y += Math.cos(t * 12) * 0.04
@@ -113,31 +51,27 @@ function InteractiveShape({ position, color, drag, children }) {
       ref.current.scale.lerp(new THREE.Vector3(1, 1, 1), 0.08)
     }
 
-    // Idle float
     ref.current.position.y = basePos.current.y + Math.sin(t * 0.5 + basePos.current.x) * 0.3
     ref.current.rotation.y += 0.004
   })
 
-  const onDown = useCallback((e) => {
+  const handleDown = useCallback((e) => {
     e.stopPropagation()
-    drag.active = true
-    drag.target = ref.current
-    drag.offset.copy(ref.current.position).sub(e.point)
-    drag.velocity.set(0, 0, 0)
-    drag.lastPos.copy(e.point)
     ref.current.userData._dragging = true
     ref.current.userData._throwTime = 0
     ref.current.userData._throwVel = null
+    const offset = ref.current.position.clone().sub(e.point)
+    onStartDrag(ref.current, offset)
     document.body.style.cursor = 'grabbing'
-  }, [drag])
+  }, [onStartDrag])
 
   return (
     <mesh
       ref={ref}
       position={position}
-      onPointerOver={(e) => { e.stopPropagation(); setHovered(true); if (!drag.active) document.body.style.cursor = 'grab' }}
-      onPointerOut={(e) => { e.stopPropagation(); setHovered(false); if (!drag.active) document.body.style.cursor = 'default' }}
-      onPointerDown={onDown}
+      onPointerOver={(e) => { e.stopPropagation(); setHovered(true); document.body.style.cursor = 'grab' }}
+      onPointerOut={(e) => { e.stopPropagation(); setHovered(false); document.body.style.cursor = 'default' }}
+      onPointerDown={handleDown}
     >
       {children}
       <meshStandardMaterial
@@ -151,21 +85,54 @@ function InteractiveShape({ position, color, drag, children }) {
   )
 }
 
+// ─── Drag catcher plane — only exists during drag ───
+function DragCatcher({ target, offset, onEndDrag }) {
+  const meshRef = useRef()
+  const { camera } = useThree()
+  const velocity = useRef(new THREE.Vector3())
+
+  useFrame(() => {
+    if (meshRef.current) meshRef.current.quaternion.copy(camera.quaternion)
+  })
+
+  return (
+    <mesh
+      ref={meshRef}
+      onPointerMove={(e) => {
+        e.stopPropagation()
+        if (!target) return
+        const newPos = e.point.clone().add(offset)
+        velocity.current.copy(newPos).sub(target.position)
+        target.position.copy(newPos)
+      }}
+      onPointerUp={(e) => {
+        e.stopPropagation()
+        if (target) {
+          target.userData._throwVel = velocity.current.clone().multiplyScalar(0.8)
+          target.userData._throwTime = 3
+          target.userData._dragging = false
+        }
+        document.body.style.cursor = 'default'
+        onEndDrag()
+      }}
+    >
+      <planeGeometry args={[200, 200]} />
+      <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+    </mesh>
+  )
+}
+
 // ─── Background particles that react to mouse ───
 function ReactiveParticles() {
   const count = 150
   const ref = useRef()
-  const mouseRef = useRef(new THREE.Vector3())
+  const mouseWorld = useRef(new THREE.Vector3(999, 999, 0))
   const { camera } = useThree()
 
   const basePositions = useMemo(() => {
     const pos = []
     for (let i = 0; i < count; i++) {
-      pos.push(new THREE.Vector3(
-        (Math.random() - 0.5) * 25,
-        (Math.random() - 0.5) * 20,
-        (Math.random() - 0.5) * 10 - 5
-      ))
+      pos.push(new THREE.Vector3((Math.random() - 0.5) * 25, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 10 - 5))
     }
     return pos
   }, [])
@@ -176,19 +143,16 @@ function ReactiveParticles() {
     return arr
   }, [basePositions])
 
-  // Track mouse in world space
   useEffect(() => {
     const onMove = (e) => {
-      const rect = document.querySelector('canvas')?.getBoundingClientRect()
-      if (!rect) return
-      const ndc = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      )
-      const raycaster = new THREE.Raycaster()
-      raycaster.setFromCamera(ndc, camera)
+      const canvas = document.querySelector('canvas')
+      if (!canvas) return
+      const rect = canvas.getBoundingClientRect()
+      const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
+      const ray = new THREE.Raycaster()
+      ray.setFromCamera(ndc, camera)
       const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 5)
-      raycaster.ray.intersectPlane(plane, mouseRef.current)
+      ray.ray.intersectPlane(plane, mouseWorld.current)
     }
     window.addEventListener('pointermove', onMove)
     return () => window.removeEventListener('pointermove', onMove)
@@ -196,52 +160,58 @@ function ReactiveParticles() {
 
   useFrame((state) => {
     if (!ref.current) return
-    const posArray = ref.current.geometry.attributes.position.array
+    const posArr = ref.current.geometry.attributes.position.array
     const t = state.clock.elapsedTime
-
     for (let i = 0; i < count; i++) {
       const base = basePositions[i]
       const idx = i * 3
       let x = base.x + Math.sin(t * 0.3 + i) * 0.3
       let y = base.y + Math.cos(t * 0.2 + i * 0.7) * 0.3
-      let z = base.z
-
-      // Push away from mouse
-      const dx = x - mouseRef.current.x
-      const dy = y - mouseRef.current.y
+      const dx = x - mouseWorld.current.x
+      const dy = y - mouseWorld.current.y
       const dist = Math.sqrt(dx * dx + dy * dy)
-      if (dist < 3) {
+      if (dist < 3 && dist > 0) {
         const force = (3 - dist) / 3 * 1.5
         x += (dx / dist) * force
         y += (dy / dist) * force
       }
-
-      posArray[idx] = x
-      posArray[idx + 1] = y
-      posArray[idx + 2] = z
+      posArr[idx] = x
+      posArr[idx + 1] = y
+      posArr[idx + 2] = base.z
     }
     ref.current.geometry.attributes.position.needsUpdate = true
   })
 
   return (
     <points ref={ref}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-      </bufferGeometry>
+      <bufferGeometry><bufferAttribute attach="attributes-position" args={[positions, 3]} /></bufferGeometry>
       <pointsMaterial size={0.06} color="#00ffff" transparent opacity={0.5} sizeAttenuation />
     </points>
   )
 }
 
 // ─── GD shapes ───
-function GDCube(p) { return <InteractiveShape {...p}><boxGeometry args={[1, 1, 1]} /></InteractiveShape> }
-function GDShip(p) { return <InteractiveShape {...p}><coneGeometry args={[0.7, 1.4, 3]} /></InteractiveShape> }
-function GDBall(p) { return <InteractiveShape {...p}><sphereGeometry args={[0.55, 32, 32]} /></InteractiveShape> }
-function GDUFO(p) { return <InteractiveShape {...p}><cylinderGeometry args={[0.7, 0.7, 0.2, 32]} /></InteractiveShape> }
-function GDWave(p) { return <InteractiveShape {...p}><octahedronGeometry args={[0.5, 0]} /></InteractiveShape> }
-function GDSpike(p) { return <InteractiveShape {...p}><coneGeometry args={[0.5, 1.2, 4]} /></InteractiveShape> }
-function GDOrb(p) { return <InteractiveShape {...p}><torusGeometry args={[0.5, 0.18, 16, 48]} /></InteractiveShape> }
-function GDDiamond(p) { return <InteractiveShape {...p}><octahedronGeometry args={[0.45, 0]} /></InteractiveShape> }
+const S = (Geo, args) => (p) => <InteractiveShape {...p}><Geo args={args} /></InteractiveShape>
+const GDCube = S('boxGeometry', [1, 1, 1])
+const GDShip = S('coneGeometry', [0.7, 1.4, 3])
+const GDBall = S('sphereGeometry', [0.55, 32, 32])
+const GDUFO = S('cylinderGeometry', [0.7, 0.7, 0.2, 32])
+const GDWave = S('octahedronGeometry', [0.5, 0])
+const GDSpike = S('coneGeometry', [0.5, 1.2, 4])
+const GDOrb = S('torusGeometry', [0.5, 0.18, 16, 48])
+const GDDiamond = S('octahedronGeometry', [0.45, 0])
+
+// Oops, the S factory won't work with JSX string tags. Let me just use normal components.
+
+// ─── Actual GD shapes ───
+function GDCubeC(p) { return <InteractiveShape {...p}><boxGeometry args={[1, 1, 1]} /></InteractiveShape> }
+function GDShipC(p) { return <InteractiveShape {...p}><coneGeometry args={[0.7, 1.4, 3]} /></InteractiveShape> }
+function GDBallC(p) { return <InteractiveShape {...p}><sphereGeometry args={[0.55, 32, 32]} /></InteractiveShape> }
+function GDUFOC(p) { return <InteractiveShape {...p}><cylinderGeometry args={[0.7, 0.7, 0.2, 32]} /></InteractiveShape> }
+function GDWaveC(p) { return <InteractiveShape {...p}><octahedronGeometry args={[0.5, 0]} /></InteractiveShape> }
+function GDSpikeC(p) { return <InteractiveShape {...p}><coneGeometry args={[0.5, 1.2, 4]} /></InteractiveShape> }
+function GDOrbC(p) { return <InteractiveShape {...p}><torusGeometry args={[0.5, 0.18, 16, 48]} /></InteractiveShape> }
+function GDDiamondC(p) { return <InteractiveShape {...p}><octahedronGeometry args={[0.45, 0]} /></InteractiveShape> }
 
 const DEFAULT_SHAPES = [
   { type: 'cube', position: [-3.5, 2, -2], color: '#00ffff' },
@@ -258,23 +228,36 @@ const DEFAULT_SHAPES = [
   { type: 'diamond', position: [2.5, 3.5, -5], color: '#00ccff' },
 ]
 
-const SHAPE_MAP = { cube: GDCube, ship: GDShip, ball: GDBall, ufo: GDUFO, wave: GDWave, spike: GDSpike, orb: GDOrb, diamond: GDDiamond }
-
-function ShapeRenderer({ shape, drag }) {
-  const C = SHAPE_MAP[shape.type] || GDCube
-  return <C position={shape.position} color={shape.color} drag={drag} />
-}
+const SHAPE_MAP = { cube: GDCubeC, ship: GDShipC, ball: GDBallC, ufo: GDUFOC, wave: GDWaveC, spike: GDSpikeC, orb: GDOrbC, diamond: GDDiamondC }
 
 function SceneContent({ shapes }) {
-  const drag = useDragStore()
+  const [dragState, setDragState] = useState(null) // { target, offset } or null
+
+  const onStartDrag = useCallback((mesh, offset) => {
+    setDragState({ target: mesh, offset })
+  }, [])
+
+  const onEndDrag = useCallback(() => {
+    setDragState(null)
+  }, [])
+
   return (
     <>
       <ambientLight intensity={0.2} />
       <pointLight position={[5, 5, 5]} color="#00ffff" intensity={2} />
       <pointLight position={[-5, -3, 3]} color="#ff00ff" intensity={1.5} />
       <pointLight position={[0, 3, -5]} color="#ffff00" intensity={1} />
-      <DragCatcher drag={drag} />
-      {shapes.map((s, i) => <ShapeRenderer key={`${s.type}-${i}`} shape={s} drag={drag} />)}
+
+      {/* Only render the drag catcher WHEN dragging — otherwise it blocks shape events */}
+      {dragState && (
+        <DragCatcher target={dragState.target} offset={dragState.offset} onEndDrag={onEndDrag} />
+      )}
+
+      {shapes.map((s, i) => {
+        const C = SHAPE_MAP[s.type] || GDCubeC
+        return <C key={`${s.type}-${i}`} position={s.position} color={s.color} onStartDrag={onStartDrag} />
+      })}
+
       <ReactiveParticles />
       <Stars radius={50} depth={50} count={800} factor={4} saturation={1} fade speed={1.5} />
     </>
@@ -321,10 +304,7 @@ function SecretMenu({ shapes, setShapes, open, setOpen }) {
         <div className="mb-4 p-3 rounded-xl" style={{ background: 'rgba(0,255,255,0.05)', border: '1px solid rgba(0,255,255,0.15)' }}>
           <div className="flex items-center gap-3 mb-2">
             <img src={getPlayerIconURL(profile.username)} alt="" className="w-12 h-12 rounded-lg" style={{ background: '#111' }} />
-            <div>
-              <div className="font-bold text-white text-sm">{profile.username}</div>
-              <div className="text-xs" style={{ color: '#00ffff' }}>Rank #{profile.rank || '???'}</div>
-            </div>
+            <div><div className="font-bold text-white text-sm">{profile.username}</div><div className="text-xs" style={{ color: '#00ffff' }}>Rank #{profile.rank || '???'}</div></div>
           </div>
           <div className="grid grid-cols-4 gap-1 text-center">
             {[{ v: profile.stars, l: '★', c: '#ffff00' }, { v: profile.demons, l: '👿', c: '#ff4444' }, { v: profile.cp, l: 'Cr.Pts', c: '#00ff88' }, { v: profile.diamonds, l: '💎', c: '#00ccff' }].map(s => (
@@ -371,15 +351,13 @@ export default function Scene3D() {
 
   useEffect(() => {
     const PATTERN = ['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight']
-    let buffer = []
-    let timer = null
+    let buffer = [], timer = null
     const handler = (e) => {
       if (e.key === 'Escape') { setMenuOpen(false); return }
       if (PATTERN.includes(e.key)) {
-        buffer.push(e.key)
-        clearTimeout(timer)
+        buffer.push(e.key); clearTimeout(timer)
         timer = setTimeout(() => { buffer = [] }, 2000)
-        if (buffer.length >= PATTERN.length && buffer.slice(-4).every((k, i) => k === PATTERN[i])) {
+        if (buffer.length >= 4 && buffer.slice(-4).every((k, i) => k === PATTERN[i])) {
           e.preventDefault(); setMenuOpen(prev => !prev); buffer = []
         }
       }
@@ -390,11 +368,7 @@ export default function Scene3D() {
 
   return (
     <>
-      <Canvas
-        camera={{ position: [0, 0, 8], fov: 60 }}
-        style={{ position: 'absolute', inset: 0 }}
-        raycaster={{ params: { Points: { threshold: 0.5 } } }}
-      >
+      <Canvas camera={{ position: [0, 0, 8], fov: 60 }} style={{ position: 'absolute', inset: 0 }}>
         <SceneContent shapes={shapes} />
       </Canvas>
       <SecretMenu shapes={shapes} setShapes={setShapes} open={menuOpen} setOpen={setMenuOpen} />
