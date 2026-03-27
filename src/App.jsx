@@ -7,7 +7,8 @@ import AnimatedCounter from './components/AnimatedCounter'
 import PlayerSearch from './components/PlayerSearch'
 import Leaderboard from './components/Leaderboard'
 import DailyLevel from './components/DailyLevel'
-import { FiZap, FiUsers, FiTrendingUp, FiGlobe, FiArrowRight, FiGithub, FiStar, FiTarget, FiCpu, FiMusic, FiCompass, FiShield } from 'react-icons/fi'
+import DemonList from './components/DemonList'
+import { FiZap, FiUsers, FiTrendingUp, FiGlobe, FiArrowRight, FiGithub, FiStar, FiTarget, FiCpu, FiMusic, FiCompass, FiShield, FiAlertTriangle } from 'react-icons/fi'
 import { Toaster, toast } from 'sonner'
 import './index.css'
 
@@ -46,7 +47,7 @@ function NavBar() {
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ type: 'spring', stiffness: 100 }}
-      className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-4 transition-all duration-300"
+      className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 sm:px-8 py-3 sm:py-4 transition-all duration-300"
       style={{
         background: scrolled ? 'rgba(5, 5, 20, 0.9)' : 'transparent',
         backdropFilter: scrolled ? 'blur(20px)' : 'none',
@@ -69,7 +70,7 @@ function NavBar() {
         </span>
       </motion.div>
 
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-3 sm:gap-6">
         {['Leaderboards', 'Levels', 'Players', 'Tools'].map((item, i) => (
           <motion.a
             key={item}
@@ -211,7 +212,7 @@ function App() {
       </section>
 
       {/* ========== STATS BAR ========== */}
-      <section className="relative z-10 py-16 px-8">
+      <section className="relative z-10 py-10 sm:py-16 px-4 sm:px-8">
         <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
           <AnimatedCounter end={2500000} suffix="+" label="Active Players" color="#00ffff" />
           <AnimatedCounter end={90000000} suffix="+" label="Levels Created" color="#ff00ff" />
@@ -221,14 +222,14 @@ function App() {
       </section>
 
       {/* ========== PLAYER SEARCH ========== */}
-      <section id="search" className="relative z-10 py-20 px-8">
+      <section id="search" className="relative z-10 py-12 sm:py-20 px-4 sm:px-8">
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           className="text-center mb-12"
         >
-          <h2 className="text-4xl md:text-5xl font-black mb-4" style={{
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black mb-4" style={{
             background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
@@ -241,14 +242,14 @@ function App() {
       </section>
 
       {/* ========== DAILY & WEEKLY LEVELS ========== */}
-      <section id="levels" className="relative z-10 py-20 px-8">
+      <section id="levels" className="relative z-10 py-12 sm:py-20 px-4 sm:px-8">
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           className="text-center mb-12"
         >
-          <h2 className="text-4xl md:text-5xl font-black mb-4" style={{
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black mb-4" style={{
             background: 'linear-gradient(135deg, #ff0044, #ff00ff)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
@@ -261,14 +262,14 @@ function App() {
       </section>
 
       {/* ========== LEADERBOARD ========== */}
-      <section id="leaderboards" className="relative z-10 py-20 px-8">
+      <section id="leaderboards" className="relative z-10 py-12 sm:py-20 px-4 sm:px-8">
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           className="text-center mb-12"
         >
-          <h2 className="text-4xl md:text-5xl font-black mb-4" style={{
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black mb-4" style={{
             background: 'linear-gradient(135deg, #ffff00, #ff8800)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
@@ -280,15 +281,35 @@ function App() {
         <Leaderboard />
       </section>
 
+      {/* ========== DEMON LIST (POINTERCRATE) ========== */}
+      <section className="relative z-10 py-12 sm:py-20 px-4 sm:px-8">
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          className="text-center mb-12"
+        >
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black mb-4" style={{
+            background: 'linear-gradient(135deg, #ff0044, #ff4444)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            Hardest Demons
+          </h2>
+          <p style={{ color: '#9ca3af' }} className="text-lg">Top 20 hardest levels from the Pointercrate Demon List</p>
+        </motion.div>
+        <DemonList />
+      </section>
+
       {/* ========== FEATURES GRID ========== */}
-      <section id="tools" className="relative z-10 py-20 px-8">
+      <section id="tools" className="relative z-10 py-12 sm:py-20 px-4 sm:px-8">
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
           className="text-center mb-16"
         >
-          <h2 className="text-4xl md:text-5xl font-black mb-4" style={{
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black mb-4" style={{
             background: 'linear-gradient(135deg, #00ff88, #00ffff)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
@@ -317,7 +338,7 @@ function App() {
       </section>
 
       {/* ========== CTA ========== */}
-      <section className="relative z-10 py-24 px-8">
+      <section className="relative z-10 py-16 sm:py-24 px-4 sm:px-8">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -364,7 +385,7 @@ function App() {
       </section>
 
       {/* ========== FOOTER ========== */}
-      <footer className="relative z-10 py-12 px-8" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+      <footer className="relative z-10 py-8 sm:py-12 px-4 sm:px-8" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div
