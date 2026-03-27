@@ -84,6 +84,22 @@ export async function getPointercrateRankings(limit = 50) {
   return res.json();
 }
 
+// ──────────────── AREDL (All Rated Extreme Demons List) ────────────────
+
+const AREDL_RAW = 'https://raw.githubusercontent.com/All-Rated-Extreme-Demon-List/AREDL/main/data';
+
+export async function getAREDLList() {
+  const res = await fetch(`${AREDL_RAW}/_list.json`);
+  if (!res.ok) throw new Error('Failed to fetch AREDL list');
+  return res.json(); // returns array of slug strings
+}
+
+export async function getAREDLDemon(slug) {
+  const res = await fetch(`${AREDL_RAW}/${slug}.json`);
+  if (!res.ok) throw new Error('Demon not found');
+  return res.json();
+}
+
 // ──────────────── UTILS ────────────────
 
 export function getDifficultyColor(diff) {

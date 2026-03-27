@@ -15,6 +15,7 @@ import LevelAnalyzer from './pages/LevelAnalyzer'
 import SongExplorer from './pages/SongExplorer'
 import DemonTracker from './pages/DemonTracker'
 import CrewFinder from './pages/CrewFinder'
+import FullDemonList from './pages/FullDemonList'
 import { FiZap, FiUsers, FiTrendingUp, FiGlobe, FiArrowRight, FiGithub, FiTarget, FiMusic, FiCompass, FiShield } from 'react-icons/fi'
 import { Toaster, toast } from 'sonner'
 import './index.css'
@@ -173,6 +174,12 @@ function HomePage() {
         <div className="mb-16">
           <h3 className="text-xl sm:text-2xl font-bold text-center mb-6" style={{ color: '#ff4444' }}>Hardest Demons</h3>
           <DemonList />
+          <div className="text-center mt-6">
+            <Link to="/tools/full-demon-list" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm"
+              style={{ background: 'rgba(255,68,68,0.15)', border: '1px solid rgba(255,68,68,0.3)', color: '#ff4444', textDecoration: 'none' }}>
+              View Full Demon List (Pointercrate + AREDL) →
+            </Link>
+          </div>
         </div>
         <div>
           <h3 className="text-xl sm:text-2xl font-bold text-center mb-6" style={{ color: '#ff8888' }}>Player Rankings (List Points)</h3>
@@ -252,6 +259,7 @@ function App() {
         <Route path="/tools/song-explorer" element={<SongExplorer />} />
         <Route path="/tools/demon-tracker" element={<DemonTracker />} />
         <Route path="/tools/crew-finder" element={<CrewFinder />} />
+        <Route path="/tools/full-demon-list" element={<FullDemonList />} />
       </Routes>
     </div>
   )
