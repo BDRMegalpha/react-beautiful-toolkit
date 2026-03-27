@@ -15,7 +15,7 @@ function LevelCard({ level, type, accent, delay = 0 }) {
       viewport={{ once: true }}
       transition={{ delay }}
       whileHover={{ scale: 1.03, y: -5 }}
-      onClick={() => level.levelID && window.open(`https://gdbrowser.com/${level.levelID}`, '_blank')}
+      onClick={() => (level.id || level.levelID) && window.open(`https://gdbrowser.com/${(level.id || level.levelID)}`, '_blank')}
       className="relative rounded-2xl overflow-hidden cursor-pointer group"
       style={{
         background: 'rgba(10, 10, 30, 0.9)',
@@ -52,7 +52,7 @@ function LevelCard({ level, type, accent, delay = 0 }) {
         <h3 className="text-2xl font-black text-white mb-1">{level.name || 'Unknown Level'}</h3>
         <p className="text-sm mb-4" style={{ color: '#9ca3af' }}>
           by <span style={{ color: accent }}>{level.author || 'Unknown'}</span>
-          {level.levelID && <span className="ml-2" style={{ color: '#6b7280' }}>#{level.levelID}</span>}
+          {(level.id || level.levelID) && <span className="ml-2" style={{ color: '#6b7280' }}>#{(level.id || level.levelID)}</span>}
         </p>
 
         {/* Difficulty + Length */}
@@ -101,9 +101,9 @@ function LevelCard({ level, type, accent, delay = 0 }) {
       </div>
 
       {/* Play button overlay — opens level on GDBrowser */}
-      {level.levelID && (
+      {(level.id || level.levelID) && (
         <motion.a
-          href={`https://gdbrowser.com/${level.levelID}`}
+          href={`https://gdbrowser.com/${(level.id || level.levelID)}`}
           target="_blank"
           rel="noopener noreferrer"
           className="absolute top-4 right-4 w-12 h-12 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"

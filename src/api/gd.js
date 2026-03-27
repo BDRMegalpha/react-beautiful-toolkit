@@ -1,6 +1,7 @@
 const isDev = import.meta.env.DEV;
 const GD_BROWSER = isDev ? '/gd-api' : 'https://gdbrowser.com/api';
-const POINTERCRATE = 'https://pointercrate.com/api/v2';
+const POINTERCRATE_V2 = 'https://pointercrate.com/api/v2';
+const POINTERCRATE_V1 = 'https://pointercrate.com/api/v1';
 
 // ──────────────── PLAYER ────────────────
 
@@ -65,9 +66,8 @@ export async function getSong(id) {
 // ──────────────── POINTERCRATE DEMONS ────────────────
 
 export async function getTopDemons(limit = 50) {
-  // Pointercrate max limit per request is 100
   const capped = Math.min(limit, 100);
-  const res = await fetch(`${POINTERCRATE}/demons/listed/?limit=${capped}`, {
+  const res = await fetch(`${POINTERCRATE_V2}/demons/listed/?limit=${capped}`, {
     headers: { 'Accept': 'application/json' },
   });
   if (!res.ok) throw new Error('Failed to fetch demon list');
@@ -76,7 +76,8 @@ export async function getTopDemons(limit = 50) {
 
 export async function getPointercrateRankings(limit = 50) {
   const capped = Math.min(limit, 100);
-  const res = await fetch(`${POINTERCRATE}/players/ranking/?limit=${capped}`, {
+  // Rankings endpoint is v1, not v2
+  const res = await fetch(`${POINTERCRATE_V1}/players/ranking/?limit=${capped}`, {
     headers: { 'Accept': 'application/json' },
   });
   if (!res.ok) throw new Error('Failed to fetch rankings');

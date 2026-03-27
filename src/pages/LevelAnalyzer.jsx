@@ -55,9 +55,9 @@ export default function LevelAnalyzer() {
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <h2 className="text-2xl font-black text-white">{level.name}</h2>
-                  <p className="text-sm" style={{ color: '#9ca3af' }}>by <span style={{ color: diffColor }}>{level.author}</span> · ID: {level.levelID}</p>
+                  <p className="text-sm" style={{ color: '#9ca3af' }}>by <span style={{ color: diffColor }}>{level.author}</span> · ID: {level.id || level.levelID}</p>
                 </div>
-                <a href={`https://gdbrowser.com/${level.levelID}`} target="_blank" rel="noopener noreferrer"
+                <a href={`https://gdbrowser.com/${level.id || level.levelID}`} target="_blank" rel="noopener noreferrer"
                   className="p-2 rounded-lg" style={{ background: `${diffColor}22`, color: diffColor }}>
                   <FiExternalLink size={18} />
                 </a>
