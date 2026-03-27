@@ -1,153 +1,103 @@
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { Canvas, useFrame, useThree, extend } from '@react-three/fiber'
 import { Stars } from '@react-three/drei'
 import * as THREE from 'three'
 import { searchPlayer, getPlayerIconURL } from '../api/gd'
 
 /*
-  Drag system: uses a global ref to track which mesh is being dragged.
-  A DragManager component runs in useFrame and handles all drag logic
-  by listening to native DOM events on the canvas, then raycasting to
-  find/move shapes.
+  3D Drag: Each shape uses R3F's onPointerDown. A full-screen transparent
+  plane is rendered in front of everything. When dragging starts on a shape,
+  the plane becomes active and captures onPointerMove/onPointerUp events,
+  computing the drag position via ray-plane intersection.
 */
-const dragRef = {
-  active: false,
-  mesh: null,
-  plane: new THREE.Plane(),
-  offset: new THREE.Vector3(),
-  intersection: new THREE.Vector3(),
-  prevPoint: new THREE.Vector3(),
-  velocity: new THREE.Vector3(),
+
+// ─── Shared drag state ───
+const useDragStore = () => {
+  const state = useMemo(() => ({
+    active: false,
+    target: null,
+    plane: new THREE.Plane(),
+    offset: new THREE.Vector3(),
+    velocity: new THREE.Vector3(),
+    lastPos: new THREE.Vector3(),
+  }), [])
+  return state
 }
 
-// All interactive meshes register here
-const interactiveMeshes = new Set()
+// ─── Catch-all transparent plane for drag ───
+function DragCatcher({ drag }) {
+  const meshRef = useRef()
+  const { camera } = useThree()
 
-function DragManager() {
-  const { camera, gl, raycaster } = useThree()
-  const mouse = useMemo(() => new THREE.Vector2(), [])
-
-  useEffect(() => {
-    const canvas = gl.domElement
-
-    const getMouseNDC = (e) => {
-      const rect = canvas.getBoundingClientRect()
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+  // Keep plane facing camera
+  useFrame(() => {
+    if (meshRef.current) {
+      meshRef.current.quaternion.copy(camera.quaternion)
+      meshRef.current.position.set(0, 0, 0)
     }
+  })
 
-    const onPointerDown = (e) => {
-      getMouseNDC(e)
-      raycaster.setFromCamera(mouse, camera)
-      const meshArray = Array.from(interactiveMeshes).filter(m => m.current)
-      const objects = meshArray.map(m => m.current)
-      const intersects = raycaster.intersectObjects(objects, false)
+  const onMove = useCallback((e) => {
+    if (!drag.active || !drag.target) return
+    e.stopPropagation()
+    const newPos = e.point.clone().add(drag.offset)
+    drag.velocity.copy(newPos).sub(drag.target.position)
+    drag.target.position.copy(newPos)
+    drag.lastPos.copy(e.point)
+  }, [drag])
 
-      if (intersects.length > 0) {
-        const hit = intersects[0]
-        dragRef.active = true
-        dragRef.mesh = hit.object
-        // Create a plane facing camera at the object's z depth
-        dragRef.plane.setFromNormalAndCoplanarPoint(
-          camera.getWorldDirection(new THREE.Vector3()).negate(),
-          hit.object.position
-        )
-        raycaster.ray.intersectPlane(dragRef.plane, dragRef.intersection)
-        dragRef.offset.copy(hit.object.position).sub(dragRef.intersection)
-        dragRef.prevPoint.copy(dragRef.intersection)
-        dragRef.velocity.set(0, 0, 0)
-        canvas.style.cursor = 'grabbing'
-        // Mark this mesh as being dragged
-        dragRef.mesh.userData.dragging = true
-      }
-    }
+  const onUp = useCallback((e) => {
+    if (!drag.active || !drag.target) return
+    e.stopPropagation()
+    // Store throw velocity on the mesh
+    drag.target.userData._throwVel = drag.velocity.clone().multiplyScalar(0.8)
+    drag.target.userData._throwTime = 3
+    drag.target.userData._dragging = false
+    drag.active = false
+    drag.target = null
+    document.body.style.cursor = 'default'
+  }, [drag])
 
-    const onPointerMove = (e) => {
-      getMouseNDC(e)
-      raycaster.setFromCamera(mouse, camera)
-
-      if (dragRef.active && dragRef.mesh) {
-        raycaster.ray.intersectPlane(dragRef.plane, dragRef.intersection)
-        const newPos = dragRef.intersection.clone().add(dragRef.offset)
-        dragRef.velocity.copy(newPos).sub(dragRef.mesh.position).multiplyScalar(0.8)
-        dragRef.mesh.position.copy(newPos)
-        dragRef.prevPoint.copy(dragRef.intersection)
-      } else {
-        // Check hover
-        const meshArray = Array.from(interactiveMeshes).filter(m => m.current)
-        const objects = meshArray.map(m => m.current)
-        const intersects = raycaster.intersectObjects(objects, false)
-        if (intersects.length > 0) {
-          canvas.style.cursor = 'grab'
-          intersects[0].object.userData.hovered = true
-          objects.forEach(o => { if (o !== intersects[0].object) o.userData.hovered = false })
-        } else {
-          canvas.style.cursor = 'default'
-          objects.forEach(o => { o.userData.hovered = false })
-        }
-      }
-    }
-
-    const onPointerUp = () => {
-      if (dragRef.mesh) {
-        dragRef.mesh.userData.dragging = false
-        dragRef.mesh.userData.throwVelocity = dragRef.velocity.clone()
-        dragRef.mesh.userData.throwTimer = 3
-      }
-      dragRef.active = false
-      dragRef.mesh = null
-      canvas.style.cursor = 'default'
-    }
-
-    canvas.addEventListener('pointerdown', onPointerDown)
-    canvas.addEventListener('pointermove', onPointerMove)
-    canvas.addEventListener('pointerup', onPointerUp)
-    canvas.addEventListener('pointerleave', onPointerUp)
-
-    return () => {
-      canvas.removeEventListener('pointerdown', onPointerDown)
-      canvas.removeEventListener('pointermove', onPointerMove)
-      canvas.removeEventListener('pointerup', onPointerUp)
-      canvas.removeEventListener('pointerleave', onPointerUp)
-    }
-  }, [camera, gl, raycaster, mouse])
-
-  return null
+  return (
+    <mesh
+      ref={meshRef}
+      onPointerMove={drag.active ? onMove : undefined}
+      onPointerUp={drag.active ? onUp : undefined}
+      renderOrder={-1}
+    >
+      <planeGeometry args={[200, 200]} />
+      <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+    </mesh>
+  )
 }
 
-// ─── Shape wrapper with hover jiggle + throw response ───
-function InteractiveShape({ position, color, children }) {
+// ─── Interactive shape ───
+function InteractiveShape({ position, color, drag, children }) {
   const ref = useRef()
   const basePos = useRef(new THREE.Vector3(...position))
-
-  // Register for raycasting
-  useEffect(() => {
-    interactiveMeshes.add(ref)
-    return () => interactiveMeshes.delete(ref)
-  }, [])
+  const [hovered, setHovered] = useState(false)
 
   useFrame((state) => {
     if (!ref.current) return
     const t = state.clock.elapsedTime
     const ud = ref.current.userData
 
-    // Being dragged — scale up, handled by DragManager
-    if (ud.dragging) {
+    // Being dragged
+    if (ud._dragging) {
       ref.current.scale.setScalar(1.3)
       return
     }
 
     // Throw physics
-    if (ud.throwTimer > 0) {
-      ud.throwTimer -= 0.016
-      const vel = ud.throwVelocity
-      if (vel) {
+    if (ud._throwTime > 0) {
+      ud._throwTime -= 0.016
+      const vel = ud._throwVel
+      if (vel && vel.length() > 0.0001) {
         ref.current.position.add(vel)
         vel.multiplyScalar(0.93)
         ref.current.rotation.x += vel.x * 2
         ref.current.rotation.y += vel.y * 2
       }
-      // Drift back
       const drift = basePos.current.clone().sub(ref.current.position).multiplyScalar(0.005)
       ref.current.position.add(drift)
       ref.current.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05)
@@ -155,12 +105,12 @@ function InteractiveShape({ position, color, children }) {
     }
 
     // Hover jiggle
-    if (ud.hovered) {
-      ref.current.rotation.x += Math.sin(t * 15) * 0.03
-      ref.current.rotation.y += Math.cos(t * 12) * 0.03
-      ref.current.scale.setScalar(1.2 + Math.sin(t * 10) * 0.08)
+    if (hovered) {
+      ref.current.rotation.x += Math.sin(t * 15) * 0.04
+      ref.current.rotation.y += Math.cos(t * 12) * 0.04
+      ref.current.scale.setScalar(1.25 + Math.sin(t * 10) * 0.1)
     } else {
-      ref.current.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05)
+      ref.current.scale.lerp(new THREE.Vector3(1, 1, 1), 0.08)
     }
 
     // Idle float
@@ -168,46 +118,130 @@ function InteractiveShape({ position, color, children }) {
     ref.current.rotation.y += 0.004
   })
 
+  const onDown = useCallback((e) => {
+    e.stopPropagation()
+    drag.active = true
+    drag.target = ref.current
+    drag.offset.copy(ref.current.position).sub(e.point)
+    drag.velocity.set(0, 0, 0)
+    drag.lastPos.copy(e.point)
+    ref.current.userData._dragging = true
+    ref.current.userData._throwTime = 0
+    ref.current.userData._throwVel = null
+    document.body.style.cursor = 'grabbing'
+  }, [drag])
+
   return (
-    <mesh ref={ref} position={position}>
+    <mesh
+      ref={ref}
+      position={position}
+      onPointerOver={(e) => { e.stopPropagation(); setHovered(true); if (!drag.active) document.body.style.cursor = 'grab' }}
+      onPointerOut={(e) => { e.stopPropagation(); setHovered(false); if (!drag.active) document.body.style.cursor = 'default' }}
+      onPointerDown={onDown}
+    >
       {children}
       <meshStandardMaterial
         color={color}
         emissive={color}
-        emissiveIntensity={0.6}
+        emissiveIntensity={hovered ? 1.5 : 0.6}
         transparent
-        opacity={0.85}
+        opacity={hovered ? 1 : 0.85}
       />
     </mesh>
   )
 }
 
-// ─── GD shapes ───
-function GDCube(props) { return <InteractiveShape {...props}><boxGeometry args={[1, 1, 1]} /></InteractiveShape> }
-function GDShip(props) { return <InteractiveShape {...props}><coneGeometry args={[0.7, 1.4, 3]} /></InteractiveShape> }
-function GDBall(props) { return <InteractiveShape {...props}><sphereGeometry args={[0.55, 32, 32]} /></InteractiveShape> }
-function GDUFO(props) { return <InteractiveShape {...props}><cylinderGeometry args={[0.7, 0.7, 0.2, 32]} /></InteractiveShape> }
-function GDWave(props) { return <InteractiveShape {...props}><octahedronGeometry args={[0.5, 0]} /></InteractiveShape> }
-function GDSpike(props) { return <InteractiveShape {...props}><coneGeometry args={[0.5, 1.2, 4]} /></InteractiveShape> }
-function GDOrb(props) { return <InteractiveShape {...props}><torusGeometry args={[0.5, 0.18, 16, 48]} /></InteractiveShape> }
-function GDDiamond(props) { return <InteractiveShape {...props}><octahedronGeometry args={[0.45, 0]} /></InteractiveShape> }
+// ─── Background particles that react to mouse ───
+function ReactiveParticles() {
+  const count = 150
+  const ref = useRef()
+  const mouseRef = useRef(new THREE.Vector3())
+  const { camera } = useThree()
 
-function FloatingParticles() {
-  const count = 200
-  const positions = useMemo(() => {
-    const pos = new Float32Array(count * 3)
-    for (let i = 0; i < count * 3; i++) pos[i] = (Math.random() - 0.5) * 30
+  const basePositions = useMemo(() => {
+    const pos = []
+    for (let i = 0; i < count; i++) {
+      pos.push(new THREE.Vector3(
+        (Math.random() - 0.5) * 25,
+        (Math.random() - 0.5) * 20,
+        (Math.random() - 0.5) * 10 - 5
+      ))
+    }
     return pos
   }, [])
-  const ref = useRef()
-  useFrame((state) => { ref.current.rotation.y = state.clock.elapsedTime * 0.02 })
+
+  const positions = useMemo(() => {
+    const arr = new Float32Array(count * 3)
+    basePositions.forEach((p, i) => { arr[i * 3] = p.x; arr[i * 3 + 1] = p.y; arr[i * 3 + 2] = p.z })
+    return arr
+  }, [basePositions])
+
+  // Track mouse in world space
+  useEffect(() => {
+    const onMove = (e) => {
+      const rect = document.querySelector('canvas')?.getBoundingClientRect()
+      if (!rect) return
+      const ndc = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      )
+      const raycaster = new THREE.Raycaster()
+      raycaster.setFromCamera(ndc, camera)
+      const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 5)
+      raycaster.ray.intersectPlane(plane, mouseRef.current)
+    }
+    window.addEventListener('pointermove', onMove)
+    return () => window.removeEventListener('pointermove', onMove)
+  }, [camera])
+
+  useFrame((state) => {
+    if (!ref.current) return
+    const posArray = ref.current.geometry.attributes.position.array
+    const t = state.clock.elapsedTime
+
+    for (let i = 0; i < count; i++) {
+      const base = basePositions[i]
+      const idx = i * 3
+      let x = base.x + Math.sin(t * 0.3 + i) * 0.3
+      let y = base.y + Math.cos(t * 0.2 + i * 0.7) * 0.3
+      let z = base.z
+
+      // Push away from mouse
+      const dx = x - mouseRef.current.x
+      const dy = y - mouseRef.current.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist < 3) {
+        const force = (3 - dist) / 3 * 1.5
+        x += (dx / dist) * force
+        y += (dy / dist) * force
+      }
+
+      posArray[idx] = x
+      posArray[idx + 1] = y
+      posArray[idx + 2] = z
+    }
+    ref.current.geometry.attributes.position.needsUpdate = true
+  })
+
   return (
     <points ref={ref}>
-      <bufferGeometry><bufferAttribute attach="attributes-position" args={[positions, 3]} /></bufferGeometry>
-      <pointsMaterial size={0.05} color="#00ffff" transparent opacity={0.6} sizeAttenuation />
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial size={0.06} color="#00ffff" transparent opacity={0.5} sizeAttenuation />
     </points>
   )
 }
+
+// ─── GD shapes ───
+function GDCube(p) { return <InteractiveShape {...p}><boxGeometry args={[1, 1, 1]} /></InteractiveShape> }
+function GDShip(p) { return <InteractiveShape {...p}><coneGeometry args={[0.7, 1.4, 3]} /></InteractiveShape> }
+function GDBall(p) { return <InteractiveShape {...p}><sphereGeometry args={[0.55, 32, 32]} /></InteractiveShape> }
+function GDUFO(p) { return <InteractiveShape {...p}><cylinderGeometry args={[0.7, 0.7, 0.2, 32]} /></InteractiveShape> }
+function GDWave(p) { return <InteractiveShape {...p}><octahedronGeometry args={[0.5, 0]} /></InteractiveShape> }
+function GDSpike(p) { return <InteractiveShape {...p}><coneGeometry args={[0.5, 1.2, 4]} /></InteractiveShape> }
+function GDOrb(p) { return <InteractiveShape {...p}><torusGeometry args={[0.5, 0.18, 16, 48]} /></InteractiveShape> }
+function GDDiamond(p) { return <InteractiveShape {...p}><octahedronGeometry args={[0.45, 0]} /></InteractiveShape> }
 
 const DEFAULT_SHAPES = [
   { type: 'cube', position: [-3.5, 2, -2], color: '#00ffff' },
@@ -226,22 +260,23 @@ const DEFAULT_SHAPES = [
 
 const SHAPE_MAP = { cube: GDCube, ship: GDShip, ball: GDBall, ufo: GDUFO, wave: GDWave, spike: GDSpike, orb: GDOrb, diamond: GDDiamond }
 
-function ShapeRenderer({ shape }) {
+function ShapeRenderer({ shape, drag }) {
   const C = SHAPE_MAP[shape.type] || GDCube
-  return <C position={shape.position} color={shape.color} />
+  return <C position={shape.position} color={shape.color} drag={drag} />
 }
 
 function SceneContent({ shapes }) {
+  const drag = useDragStore()
   return (
     <>
-      <ambientLight intensity={0.15} />
+      <ambientLight intensity={0.2} />
       <pointLight position={[5, 5, 5]} color="#00ffff" intensity={2} />
       <pointLight position={[-5, -3, 3]} color="#ff00ff" intensity={1.5} />
       <pointLight position={[0, 3, -5]} color="#ffff00" intensity={1} />
-      <DragManager />
-      {shapes.map((s, i) => <ShapeRenderer key={`${s.type}-${i}`} shape={s} />)}
-      <FloatingParticles />
-      <Stars radius={50} depth={50} count={1000} factor={4} saturation={1} fade speed={1.5} />
+      <DragCatcher drag={drag} />
+      {shapes.map((s, i) => <ShapeRenderer key={`${s.type}-${i}`} shape={s} drag={drag} />)}
+      <ReactiveParticles />
+      <Stars radius={50} depth={50} count={800} factor={4} saturation={1} fade speed={1.5} />
     </>
   )
 }
@@ -264,16 +299,10 @@ function SecretMenu({ shapes, setShapes, open, setOpen }) {
 
   const addPlayerCube = () => {
     if (!username.trim()) return
-    setShapes(prev => [...prev, {
-      type: 'cube',
-      position: [(Math.random() - 0.5) * 4, (Math.random() - 0.5) * 3, -2],
-      color: '#00ffff',
-    }])
+    setShapes(prev => [...prev, { type: 'cube', position: [(Math.random() - 0.5) * 4, (Math.random() - 0.5) * 3, -2], color: '#00ffff' }])
   }
 
-  useEffect(() => {
-    if (open && username && !profile && !profileLoading) handleLookup()
-  }, [open])
+  useEffect(() => { if (open && username && !profile && !profileLoading) handleLookup() }, [open])
 
   const addShape = (type, color) => {
     setShapes(prev => [...prev, { type, position: [(Math.random() - 0.5) * 6, (Math.random() - 0.5) * 4, -2 - Math.random() * 3], color }])
@@ -288,7 +317,6 @@ function SecretMenu({ shapes, setShapes, open, setOpen }) {
         <h3 className="text-sm font-bold uppercase tracking-widest" style={{ color: '#00ffff' }}>Secret Menu</h3>
         <button onClick={() => setOpen(false)} className="text-xs" style={{ color: '#6b7280' }}>ESC</button>
       </div>
-
       {profile && (
         <div className="mb-4 p-3 rounded-xl" style={{ background: 'rgba(0,255,255,0.05)', border: '1px solid rgba(0,255,255,0.15)' }}>
           <div className="flex items-center gap-3 mb-2">
@@ -299,60 +327,34 @@ function SecretMenu({ shapes, setShapes, open, setOpen }) {
             </div>
           </div>
           <div className="grid grid-cols-4 gap-1 text-center">
-            {[
-              { v: profile.stars, l: '★', c: '#ffff00' },
-              { v: profile.demons, l: '👿', c: '#ff4444' },
-              { v: profile.cp, l: 'Cr.Pts', c: '#00ff88' },
-              { v: profile.diamonds, l: '💎', c: '#00ccff' },
-            ].map(s => (
-              <div key={s.l} className="text-xs">
-                <div className="font-bold" style={{ color: s.c }}>{Number(s.v || 0).toLocaleString()}</div>
-                <div style={{ color: '#6b7280', fontSize: '9px' }}>{s.l}</div>
-              </div>
+            {[{ v: profile.stars, l: '★', c: '#ffff00' }, { v: profile.demons, l: '👿', c: '#ff4444' }, { v: profile.cp, l: 'Cr.Pts', c: '#00ff88' }, { v: profile.diamonds, l: '💎', c: '#00ccff' }].map(s => (
+              <div key={s.l} className="text-xs"><div className="font-bold" style={{ color: s.c }}>{Number(s.v || 0).toLocaleString()}</div><div style={{ color: '#6b7280', fontSize: '9px' }}>{s.l}</div></div>
             ))}
           </div>
           <button onClick={addPlayerCube} className="w-full mt-2 px-3 py-1.5 rounded-lg text-xs font-bold"
-            style={{ background: 'linear-gradient(135deg, #00ffff22, #ff00ff22)', border: '1px solid #00ffff33', color: '#00ffff' }}>
-            Add Cube to Scene
-          </button>
+            style={{ background: 'linear-gradient(135deg, #00ffff22, #ff00ff22)', border: '1px solid #00ffff33', color: '#00ffff' }}>Add Cube to Scene</button>
         </div>
       )}
-
       <div className="mb-4">
         <label className="text-xs block mb-1" style={{ color: '#9ca3af' }}>Your GD Username</label>
         <div className="flex gap-2">
-          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleLookup()} placeholder="Enter username..."
-            className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
+          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+            placeholder="Enter username..." className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
             style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(0,255,255,0.2)', color: '#fff' }} />
           <button onClick={handleLookup} disabled={profileLoading} className="px-3 py-2 rounded-lg text-xs font-bold"
-            style={{ background: 'linear-gradient(135deg, #00ffff, #ff00ff)', color: '#000' }}>
-            {profileLoading ? '...' : 'Go'}
-          </button>
+            style={{ background: 'linear-gradient(135deg, #00ffff, #ff00ff)', color: '#000' }}>{profileLoading ? '...' : 'Go'}</button>
         </div>
         {profileError && <div className="text-xs mt-1" style={{ color: '#ff4444' }}>{profileError}</div>}
       </div>
-
       <div className="mb-4">
         <label className="text-xs block mb-2" style={{ color: '#9ca3af' }}>Add GD Objects</label>
         <div className="grid grid-cols-4 gap-1.5">
-          {[
-            { type: 'cube', label: 'Cube', color: '#00ffff' },
-            { type: 'ship', label: 'Ship', color: '#00ff88' },
-            { type: 'ball', label: 'Ball', color: '#ffff00' },
-            { type: 'ufo', label: 'UFO', color: '#cc44ff' },
-            { type: 'wave', label: 'Wave', color: '#00ccff' },
-            { type: 'spike', label: 'Spike', color: '#ff4444' },
-            { type: 'orb', label: 'Orb', color: '#ff00ff' },
-            { type: 'diamond', label: 'Gem', color: '#ffcc00' },
-          ].map(s => (
-            <button key={s.type} onClick={() => addShape(s.type, s.color)}
-              className="px-1.5 py-1.5 rounded-lg text-[10px] font-bold hover:scale-105 transition-transform"
+          {[{ type: 'cube', label: 'Cube', color: '#00ffff' }, { type: 'ship', label: 'Ship', color: '#00ff88' }, { type: 'ball', label: 'Ball', color: '#ffff00' }, { type: 'ufo', label: 'UFO', color: '#cc44ff' }, { type: 'wave', label: 'Wave', color: '#00ccff' }, { type: 'spike', label: 'Spike', color: '#ff4444' }, { type: 'orb', label: 'Orb', color: '#ff00ff' }, { type: 'diamond', label: 'Gem', color: '#ffcc00' }].map(s => (
+            <button key={s.type} onClick={() => addShape(s.type, s.color)} className="px-1.5 py-1.5 rounded-lg text-[10px] font-bold hover:scale-105 transition-transform"
               style={{ background: `${s.color}15`, border: `1px solid ${s.color}33`, color: s.color }}>{s.label}</button>
           ))}
         </div>
       </div>
-
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs" style={{ color: '#6b7280' }}>Objects: <span style={{ color: '#00ffff' }}>{shapes.length}</span></span>
         <button onClick={() => setShapes(DEFAULT_SHAPES)} className="px-3 py-1 rounded-lg text-xs font-bold"
@@ -377,9 +379,8 @@ export default function Scene3D() {
         buffer.push(e.key)
         clearTimeout(timer)
         timer = setTimeout(() => { buffer = [] }, 2000)
-        if (buffer.length >= PATTERN.length) {
-          const last4 = buffer.slice(-PATTERN.length)
-          if (last4.every((k, i) => k === PATTERN[i])) { e.preventDefault(); setMenuOpen(prev => !prev); buffer = [] }
+        if (buffer.length >= PATTERN.length && buffer.slice(-4).every((k, i) => k === PATTERN[i])) {
+          e.preventDefault(); setMenuOpen(prev => !prev); buffer = []
         }
       }
     }
@@ -389,7 +390,11 @@ export default function Scene3D() {
 
   return (
     <>
-      <Canvas camera={{ position: [0, 0, 8], fov: 60 }} style={{ position: 'absolute', inset: 0 }}>
+      <Canvas
+        camera={{ position: [0, 0, 8], fov: 60 }}
+        style={{ position: 'absolute', inset: 0 }}
+        raycaster={{ params: { Points: { threshold: 0.5 } } }}
+      >
         <SceneContent shapes={shapes} />
       </Canvas>
       <SecretMenu shapes={shapes} setShapes={setShapes} open={menuOpen} setOpen={setMenuOpen} />

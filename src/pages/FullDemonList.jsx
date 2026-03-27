@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { FiArrowLeft, FiLoader, FiExternalLink, FiSearch } from 'react-icons/fi'
-import { getTopDemons, getAREDLList, getAREDLNameMap, getAREDLDemon } from '../api/gd'
+import { getTopDemons, getAREDLLevels } from '../api/gd'
 
 const TABS = [
-  { key: 'pointercrate', label: 'Pointercrate', desc: 'Top 100 hardest demons', color: '#ff4444' },
-  { key: 'aredl', label: 'AREDL', desc: 'All 1100+ rated extreme demons', color: '#cc44ff' },
+  { key: 'pointercrate', label: 'Pointercrate', desc: 'Top 100 hardest demons (verified)', color: '#ff4444' },
+  { key: 'aredl', label: 'AREDL', desc: 'All rated extreme demons (live)', color: '#cc44ff' },
 ]
 
 function LoadingSpinner({ color, text }) {
@@ -66,131 +66,96 @@ function PointercrateList() {
 }
 
 function AREDLList() {
-  const [allDemons, setAllDemons] = useState([]) // {slug, rank, name, data}
-  const [nameMap, setNameMap] = useState({})
+  const [demons, setDemons] = useState([])
   const [loading, setLoading] = useState(true)
-  const [loadingDetails, setLoadingDetails] = useState(false)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('')
-  const [expanded, setExpanded] = useState(null) // slug of expanded demon
-  const [expandedData, setExpandedData] = useState({}) // slug -> full data
-  const BATCH = 30
+  const [expanded, setExpanded] = useState(null)
 
   useEffect(() => {
     (async () => {
       try {
-        const [slugs, names] = await Promise.all([getAREDLList(), getAREDLNameMap()])
-        setNameMap(names)
-        // Build list with rank — slug is the demon name in snake_case
-        const list = slugs.map((slug, i) => ({
-          slug,
-          rank: i + 1,
-          displayName: slug.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-        }))
-        setAllDemons(list)
-      } catch { setError('Failed to load AREDL list') }
+        const data = await getAREDLLevels()
+        setDemons(Array.isArray(data) ? data : [])
+      } catch { setError('Failed to load AREDL') }
       finally { setLoading(false) }
     })()
   }, [])
 
-  const loadDetails = async (slug) => {
-    if (expandedData[slug]) { setExpanded(expanded === slug ? null : slug); return }
-    setExpanded(slug)
-    setLoadingDetails(true)
-    try {
-      const data = await getAREDLDemon(slug)
-      setExpandedData(prev => ({ ...prev, [slug]: data }))
-    } catch { }
-    finally { setLoadingDetails(false) }
-  }
-
-  const resolveName = (id) => nameMap[String(id)] || `Player ${id}`
-
-  if (loading) return <LoadingSpinner color="#cc44ff" text="Loading AREDL list (1100+ demons)..." />
+  if (loading) return <LoadingSpinner color="#cc44ff" text="Loading AREDL (live data)..." />
   if (error) return <div className="text-center py-8" style={{ color: '#ff6666' }}>{error}</div>
 
   const filtered = filter
-    ? allDemons.filter(d => d.displayName.toLowerCase().includes(filter.toLowerCase()))
-    : allDemons
+    ? demons.filter(d => d.name?.toLowerCase().includes(filter.toLowerCase()))
+    : demons
 
   return (
     <div>
-      {/* Search + count */}
       <div className="flex items-center gap-3 mb-4">
         <div className="relative flex-1">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#6b7280' }} size={14} />
           <input type="text" value={filter} onChange={(e) => setFilter(e.target.value)}
-            placeholder={`Search ${allDemons.length} extreme demons...`}
+            placeholder={`Search ${demons.length} extreme demons...`}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none"
             style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(204,68,255,0.2)', color: '#fff' }} />
         </div>
         <span className="text-xs font-bold shrink-0 px-2 py-1 rounded-lg" style={{ background: 'rgba(204,68,255,0.1)', color: '#cc88ff' }}>
-          {allDemons.length} demons
+          {demons.length} demons
         </span>
       </div>
 
-      {/* List */}
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         {filtered.map((d, i) => {
-          const detail = expandedData[d.slug]
-          const isExpanded = expanded === d.slug
+          const isExpanded = expanded === d.id
           return (
-            <div key={d.slug}>
+            <div key={d.id || `${d.name}-${d.position}`}>
               <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i * 0.003, 0.3) }}
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i * 0.002, 0.3) }}
                 whileHover={{ backgroundColor: 'rgba(204,68,255,0.04)' }}
-                onClick={() => loadDetails(d.slug)}
+                onClick={() => setExpanded(isExpanded ? null : d.id)}
                 className="flex items-center gap-3 px-3 sm:px-4 py-2.5 rounded-xl cursor-pointer"
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
                 <div className="w-8 sm:w-10 text-center font-black text-sm shrink-0" style={{
-                  color: d.rank <= 3 ? '#cc44ff' : d.rank <= 10 ? '#aa66ff' : d.rank <= 50 ? '#8888cc' : '#6b7280',
-                  textShadow: d.rank <= 3 ? '0 0 8px #cc44ff55' : 'none',
-                }}>#{d.rank}</div>
+                  color: d.position <= 1 ? '#ff0044' : d.position <= 3 ? '#cc44ff' : d.position <= 10 ? '#aa66ff' : d.position <= 50 ? '#8888cc' : '#6b7280',
+                  textShadow: d.position <= 3 ? '0 0 8px #cc44ff55' : 'none',
+                }}>#{d.position}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-white text-sm truncate">{d.displayName}</div>
+                  <div className="font-bold text-white text-sm truncate">{d.name}</div>
                 </div>
+                {d.points > 0 && <span className="text-xs font-mono shrink-0 hidden sm:block" style={{ color: '#cc88ff' }}>{d.points.toFixed(0)} pts</span>}
                 <div className="text-xs shrink-0" style={{ color: '#4b5563' }}>{isExpanded ? '▲' : '▼'}</div>
               </motion.div>
 
-              {/* Expanded details */}
               <AnimatePresence>
                 {isExpanded && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden">
                     <div className="px-4 py-3 ml-8 sm:ml-10 rounded-xl mb-1" style={{ background: 'rgba(204,68,255,0.05)', border: '1px solid rgba(204,68,255,0.1)' }}>
-                      {loadingDetails && !detail ? (
-                        <div className="text-xs" style={{ color: '#9ca3af' }}>Loading details...</div>
-                      ) : detail ? (
-                        <div>
-                          <div className="text-sm font-bold text-white mb-1">{detail.name}</div>
-                          <div className="text-xs mb-2" style={{ color: '#9ca3af' }}>
-                            by {resolveName(detail.author)} · verified by {resolveName(detail.verifier)}
-                          </div>
-                          {detail.tags && (
-                            <div className="flex flex-wrap gap-1 mb-2">
-                              {detail.tags.map(t => (
-                                <span key={t} className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: 'rgba(204,68,255,0.1)', color: '#cc88ff' }}>{t}</span>
-                              ))}
-                            </div>
-                          )}
-                          <div className="flex gap-3">
-                            {detail.id && (
-                              <a href={`https://gdbrowser.com/${detail.id}`} target="_blank" rel="noopener noreferrer"
-                                className="text-xs flex items-center gap-1" style={{ color: '#cc44ff', textDecoration: 'none' }}>
-                                View on GDBrowser <FiExternalLink size={10} />
-                              </a>
-                            )}
-                            {detail.verification && (
-                              <a href={detail.verification} target="_blank" rel="noopener noreferrer"
-                                className="text-xs flex items-center gap-1" style={{ color: '#ff4444', textDecoration: 'none' }}>
-                                Verification <FiExternalLink size={10} />
-                              </a>
-                            )}
-                          </div>
+                      <div className="text-sm font-bold text-white mb-1">{d.name}</div>
+
+                      {d.description && <p className="text-xs mb-2" style={{ color: '#9ca3af' }}>{d.description}</p>}
+
+                      {d.tags && d.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {d.tags.map(t => (
+                            <span key={t} className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: 'rgba(204,68,255,0.1)', color: '#cc88ff' }}>{t}</span>
+                          ))}
                         </div>
-                      ) : (
-                        <div className="text-xs" style={{ color: '#6b7280' }}>No details available</div>
                       )}
+
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        {d.points > 0 && <span style={{ color: '#ffcc00' }}>{d.points.toFixed(2)} list points</span>}
+                        {d.gddl_tier && <span style={{ color: '#6b7280' }}>GDDL Tier: {d.gddl_tier}</span>}
+                      </div>
+
+                      <div className="flex gap-3 mt-2">
+                        {d.level_id && (
+                          <a href={`https://gdbrowser.com/${d.level_id}`} target="_blank" rel="noopener noreferrer"
+                            className="text-xs flex items-center gap-1" style={{ color: '#cc44ff', textDecoration: 'none' }}>
+                            GDBrowser <FiExternalLink size={10} />
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -214,9 +179,8 @@ export default function FullDemonList() {
         </Link>
 
         <h1 className="text-3xl sm:text-4xl font-black mb-2" style={{ color: '#ff4444' }}>Full Demon List</h1>
-        <p className="mb-8" style={{ color: '#9ca3af' }}>Every extreme demon ranked by difficulty</p>
+        <p className="mb-8" style={{ color: '#9ca3af' }}>Every extreme demon ranked by difficulty — live data, updates immediately</p>
 
-        {/* Tabs */}
         <div className="flex gap-3 mb-6">
           {TABS.map(tab => (
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}

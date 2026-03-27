@@ -11,6 +11,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/gd-api/, ''),
       },
+      '/aredl-api': {
+        target: 'https://api.aredl.net',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/aredl-api/, ''),
+      },
     },
   },
 })

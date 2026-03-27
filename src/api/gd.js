@@ -84,25 +84,15 @@ export async function getPointercrateRankings(limit = 50) {
   return res.json();
 }
 
-// ──────────────── AREDL (All Rated Extreme Demons List) ────────────────
+// ──────────────── AREDL (All Rated Extreme Demons List) — LIVE API ────────────────
 
-const AREDL_RAW = 'https://raw.githubusercontent.com/All-Rated-Extreme-Demon-List/AREDL/main/data';
-
-export async function getAREDLList() {
-  const res = await fetch(`${AREDL_RAW}/_list.json`);
+export async function getAREDLLevels() {
+  // AREDL API has no CORS headers, so we proxy in dev and use codetabs in prod
+  const url = isDev
+    ? '/aredl-api/api/aredl/levels?page=0&limit=2000'
+    : `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent('https://api.aredl.net/api/aredl/levels?page=0&limit=2000')}`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch AREDL list');
-  return res.json();
-}
-
-export async function getAREDLNameMap() {
-  const res = await fetch(`${AREDL_RAW}/_name_map.json`);
-  if (!res.ok) return {};
-  return res.json();
-}
-
-export async function getAREDLDemon(slug) {
-  const res = await fetch(`${AREDL_RAW}/${slug}.json`);
-  if (!res.ok) throw new Error('Demon not found');
   return res.json();
 }
 
