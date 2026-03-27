@@ -8,7 +8,8 @@ import PlayerSearch from './components/PlayerSearch'
 import Leaderboard from './components/Leaderboard'
 import DailyLevel from './components/DailyLevel'
 import DemonList from './components/DemonList'
-import { FiZap, FiUsers, FiTrendingUp, FiGlobe, FiArrowRight, FiGithub, FiStar, FiTarget, FiCpu, FiMusic, FiCompass, FiShield, FiAlertTriangle } from 'react-icons/fi'
+import PlayerCompare from './components/PlayerCompare'
+import { FiZap, FiUsers, FiTrendingUp, FiGlobe, FiArrowRight, FiGithub, FiStar, FiTarget, FiCpu, FiMusic, FiCompass, FiShield, FiAlertTriangle, FiRadio } from 'react-icons/fi'
 import { Toaster, toast } from 'sonner'
 import './index.css'
 
@@ -63,15 +64,15 @@ function NavBar() {
             boxShadow: '0 0 20px rgba(0, 255, 255, 0.3)',
           }}
         >
-          GD
+          DR
         </div>
         <span className="font-bold text-xl text-white hidden sm:block">
-          GD<span style={{ color: '#00ffff' }}>Nexus</span>
+          Dash<span style={{ color: '#00ffff' }}>Radar</span>
         </span>
       </motion.div>
 
       <div className="flex items-center gap-3 sm:gap-6">
-        {['Leaderboards', 'Levels', 'Players', 'Tools'].map((item, i) => (
+        {['Compare', 'Leaderboards', 'Levels', 'Players', 'Tools'].map((item, i) => (
           <motion.a
             key={item}
             href={`#${item.toLowerCase()}`}
@@ -145,8 +146,8 @@ function App() {
           </motion.div>
 
           <div className="mb-6">
-            <NeonText color="#00ffff" size="clamp(2.5rem, 6vw, 5rem)" delay={0.5}>GD</NeonText>
-            <NeonText color="#ff00ff" size="clamp(2.5rem, 6vw, 5rem)" delay={0.7}>Nexus</NeonText>
+            <NeonText color="#00ffff" size="clamp(2.5rem, 6vw, 5rem)" delay={0.5}>Dash</NeonText>
+            <NeonText color="#ff00ff" size="clamp(2.5rem, 6vw, 5rem)" delay={0.7}>Radar</NeonText>
           </div>
 
           <motion.p
@@ -156,8 +157,8 @@ function App() {
             className="text-lg md:text-xl max-w-2xl mx-auto mb-10"
             style={{ color: '#9ca3af', lineHeight: 1.7 }}
           >
-            Track players. Discover levels. Climb leaderboards.
-            The most advanced Geometry Dash community platform ever built.
+            Compare players head-to-head. Track stats with radar charts.
+            The only GD platform with visual skill analysis and live data.
           </motion.p>
 
           <motion.div
@@ -209,6 +210,26 @@ function App() {
             </div>
           </motion.div>
         </motion.div>
+      </section>
+
+      {/* ========== PLAYER VS PLAYER (UNIQUE FEATURE) ========== */}
+      <section id="compare" className="relative z-10 py-12 sm:py-20 px-4 sm:px-8">
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          className="text-center mb-8"
+        >
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black mb-4" style={{
+            background: 'linear-gradient(135deg, #00ffff, #ff00ff)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            Player vs Player
+          </h2>
+          <p style={{ color: '#9ca3af' }} className="text-lg">Compare any two players head-to-head with radar charts and skill breakdowns</p>
+        </motion.div>
+        <PlayerCompare />
       </section>
 
       {/* ========== STATS BAR ========== */}
@@ -365,7 +386,7 @@ function App() {
           <div className="relative z-10">
             <h2 className="text-4xl md:text-5xl font-black mb-4 text-white">Ready to Dash?</h2>
             <p className="text-lg mb-8" style={{ color: '#9ca3af' }}>
-              Join thousands of players already using GDNexus to level up their game.
+              Join thousands of players already using DashRadar to level up their game.
             </p>
             <motion.button
               whileHover={{ scale: 1.05, boxShadow: '0 0 50px rgba(0, 255, 255, 0.5)' }}
@@ -376,7 +397,7 @@ function App() {
                 color: '#000',
                 boxShadow: '0 0 30px rgba(0, 255, 255, 0.3)',
               }}
-              onClick={() => toast.success('Welcome to GDNexus!')}
+              onClick={() => toast.success('Welcome to DashRadar!')}
             >
               Get Started <FiArrowRight />
             </motion.button>
@@ -394,10 +415,10 @@ function App() {
             >
               GD
             </div>
-            <span className="font-bold text-white">GDNexus</span>
+            <span className="font-bold text-white">DashRadar</span>
           </div>
           <p style={{ color: '#4b5563', fontSize: '0.85rem' }}>
-            Built with React, Three.js, and Framer Motion.
+            DashRadar — Built with React, Three.js, and Framer Motion.
             Not affiliated with RobTop Games.
           </p>
           <div className="flex gap-4">
