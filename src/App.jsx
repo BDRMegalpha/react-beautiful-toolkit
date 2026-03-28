@@ -90,8 +90,8 @@ function HomePage() {
       {/* HERO */}
       <section ref={heroRef} className="relative min-h-screen flex items-center justify-center overflow-hidden">
         <Scene3D />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#050514]" style={{ zIndex: 1 }} />
-        <motion.div style={{ opacity: heroOpacity, scale: heroScale, y: heroY }} className="relative z-10 text-center px-6 max-w-5xl mx-auto">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#050514]" style={{ zIndex: 1, pointerEvents: 'none' }} />
+        <motion.div style={{ opacity: heroOpacity, scale: heroScale, y: heroY, pointerEvents: 'none' }} className="relative z-10 text-center px-6 max-w-5xl mx-auto">
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
             className="inline-block px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest mb-8"
             style={{ background: 'rgba(0,255,255,0.1)', border: '1px solid rgba(0,255,255,0.3)', color: '#00ffff' }}>
@@ -105,7 +105,7 @@ function HomePage() {
             className="text-lg md:text-xl max-w-2xl mx-auto mb-10" style={{ color: '#9ca3af', lineHeight: 1.7 }}>
             Compare players head-to-head. Track stats with radar charts. The only GD platform with visual skill analysis and live data.
           </motion.p>
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2 }} className="flex flex-col sm:flex-row gap-4 justify-center">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2 }} className="flex flex-col sm:flex-row gap-4 justify-center" style={{ pointerEvents: 'auto' }}>
             <motion.button whileHover={{ scale: 1.05, boxShadow: '0 0 40px rgba(0,255,255,0.4)' }} whileTap={{ scale: 0.95 }}
               className="px-8 py-4 rounded-2xl font-bold text-lg flex items-center gap-2 justify-center"
               style={{ background: 'linear-gradient(135deg, #00ffff, #00ff88)', color: '#000', boxShadow: '0 0 25px rgba(0,255,255,0.3)' }}
